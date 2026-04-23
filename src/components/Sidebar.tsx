@@ -70,7 +70,7 @@ export default function Sidebar({ page, setPage }: Props) {
         ))}
       </div>
 
-      <div className="sidebar-version">v1.1.1</div>
+      <div className="sidebar-version">v1.1.2</div>
     </nav>
   )
 }
