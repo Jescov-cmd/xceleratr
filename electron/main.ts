@@ -236,7 +236,7 @@ function createTray() {
     tray.setContextMenu(Menu.buildFromTemplate([
       { label: 'Show Xceleratr', click: () => { mainWindow?.show(); mainWindow?.focus() } },
       { type: 'separator' },
-      { label: 'Quit', click: () => { isQuitting = true; app.quit() } },
+      { label: 'Quit Xceleratr', click: () => { isQuitting = true; app.quit() } },
     ]))
     tray.on('double-click', () => { mainWindow?.show(); mainWindow?.focus() })
   } catch (e) {
@@ -399,13 +399,14 @@ function getStartupWin(): boolean {
   } catch { return false }
 }
 function setStartupWin(enable: boolean) {
-  if (enable) {
-    execFileSync('reg.exe', ['add', WIN_RUN, '/v', APP_NAME, '/t', 'REG_SZ', '/d', process.execPath, '/f'],
-      { windowsHide: true })
-  } else {
-    try { execFileSync('reg.exe', ['delete', WIN_RUN, '/v', APP_NAME, '/f'], { windowsHide: true }) }
-    catch { /* didn't exist */ }
-  }
+  try {
+    if (enable) {
+      execFileSync('reg.exe', ['add', WIN_RUN, '/v', APP_NAME, '/t', 'REG_SZ', '/d', process.execPath, '/f'],
+        { windowsHide: true })
+    } else {
+      execFileSync('reg.exe', ['delete', WIN_RUN, '/v', APP_NAME, '/f'], { windowsHide: true })
+    }
+  } catch { /* no-op */ }
 }
 
 function getStartupMac(): boolean { return fs.existsSync(MAC_PLIST) }
