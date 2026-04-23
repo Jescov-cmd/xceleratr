@@ -1,0 +1,129 @@
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+html, body {
+  background: transparent;
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+input, textarea, [contenteditable] {
+  user-select: text;
+  -webkit-user-select: text;
+  -webkit-app-region: no-drag;
+}
+
+/* ── Dark theme (default) ────────────────────────────────────────────────── */
+.theme-dark {
+  --bg: #0d0d10;
+  --bg-secondary: #131318;
+  --bg-panel: #101015;
+  --bg-hover: #1c1c24;
+  --border: rgba(255, 255, 255, 0.07);
+  --text: #f0f0f5;
+  --text-muted: #8888a8;
+  --accent: #7c6fff;
+  --accent-text: #ffffff;
+  --active-bg: rgba(124, 111, 255, 0.16);
+  --active-text: #a99fff;
+  --active-border: #7c6fff;
+  --input-bg: #1a1a22;
+  --input-border: rgba(255, 255, 255, 0.1);
+  --input-focus: #7c6fff;
+  --track-bg: rgba(255, 255, 255, 0.1);
+  --track-fill: #7c6fff;
+  --thumb: #7c6fff;
+  --success: #3dba70;
+  --danger: #ff5252;
+  --shadow: rgba(0, 0, 0, 0.6);
+  --glow-shadow: 0 0 10px rgba(255, 255, 255, 0.75), 0 0 22px rgba(255, 255, 255, 0.35);
+}
+
+/* ── Light theme ─────────────────────────────────────────────────────────── */
+.theme-light {
+  --bg: #f5f5f8;
+  --bg-secondary: #eeeef4;
+  --bg-panel: #f0f0f6;
+  --bg-hover: #e0e0ec;
+  --border: rgba(0, 0, 0, 0.08);
+  --text: #18181f;
+  --text-muted: #7070a0;
+  --accent: #5a4fff;
+  --accent-text: #ffffff;
+  --active-bg: rgba(90, 79, 255, 0.1);
+  --active-text: #5a4fff;
+  --active-border: #5a4fff;
+  --input-bg: #e8e8f2;
+  --input-border: rgba(0, 0, 0, 0.1);
+  --input-focus: #5a4fff;
+  --track-bg: rgba(0, 0, 0, 0.1);
+  --track-fill: #5a4fff;
+  --thumb: #5a4fff;
+  --success: #1a8a45;
+  --danger: #d42020;
+  --shadow: rgba(0, 0, 0, 0.12);
+  --glow-shadow: 0 0 8px rgba(0, 0, 0, 0.5), 0 0 18px rgba(0, 0, 0, 0.22);
+}
+
+/* ── High Contrast theme ─────────────────────────────────────────────────── */
+.theme-high-contrast {
+  --bg: #000000;
+  --bg-secondary: #000000;
+  --bg-panel: #000000;
+  --bg-hover: #1a1a00;
+  --border: #ffff00;
+  --text: #ffffff;
+  --text-muted: #ffff00;
+  --accent: #ffff00;
+  --accent-text: #000000;
+  --active-bg: rgba(255, 255, 0, 0.15);
+  --active-text: #ffff00;
+  --active-border: #ffff00;
+  --input-bg: #000000;
+  --input-border: #ffff00;
+  --input-focus: #ffffff;
+  --track-bg: #333300;
+  --track-fill: #ffff00;
+  --thumb: #ffff00;
+  --success: #00ff00;
+  --danger: #ff4444;
+  --shadow: rgba(255, 255, 0, 0.15);
+  --glow-shadow: 0 0 10px rgba(255, 255, 0, 0.9), 0 0 22px rgba(255, 255, 0, 0.5);
+}
+
+.theme-high-contrast button,
+.theme-high-contrast input[type="range"] {
+  outline: 1px solid var(--border);
+}
+.theme-high-contrast button:focus-visible {
+  outline: 2px solid #ffffff;
+  outline-offset: 2px;
+}
+.theme-high-contrast .toggle-off {
+  background: #1c1c00;
+  outline: 2px solid #ffff00;
+  outline-offset: -1px;
+}
+.theme-high-contrast .toggle-on {
+  background: #ffff00;
+  outline: 2px solid #ffff00;
+  outline-offset: -1px;
+}
+.theme-high-contrast .toggle-on .toggle-thumb  { background: #000000; }
+.theme-high-contrast .toggle-off .toggle-thumb { background: #ffff00; }
+
+/* ── Scrollbar ───────────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 3px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }

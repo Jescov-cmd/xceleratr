@@ -1,0 +1,105 @@
+.cg-wrap {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-secondary);
+  overflow: hidden;
+  margin-bottom: 28px;
+}
+
+.cg-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px 4px;
+}
+
+.cg-title {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.cg-sens-badge {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text);
+  background: var(--bg-hover);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2px 8px;
+}
+
+.cg-svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.cg-grid {
+  stroke: var(--border);
+  stroke-width: 0.5;
+}
+
+.cg-axis {
+  stroke: var(--border);
+  stroke-width: 1;
+}
+
+.cg-baseline {
+  stroke: var(--text-muted);
+  stroke-width: 1;
+  opacity: 0.4;
+}
+
+.cg-threshold {
+  stroke: var(--text-muted);
+  stroke-width: 1;
+  opacity: 0.5;
+}
+
+.cg-fill {
+  fill: var(--accent);
+  opacity: 0.07;
+}
+
+.cg-line {
+  stroke: var(--accent);
+  stroke-width: 2.2;
+  fill: none;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.cg-line-v {
+  stroke: var(--accent);
+  stroke-width: 1.6;
+  fill: none;
+  opacity: 0.5;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.cg-fill-v {
+  fill: var(--accent);
+  opacity: 0.035;
+}
+
+.cg-legend {
+  fill: var(--text-muted);
+  font-size: 8.5px;
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  font-weight: 600;
+}
+
+.cg-tick {
+  fill: var(--text-muted);
+  font-size: 9px;
+  font-family: 'Segoe UI', system-ui, sans-serif;
+}
+
+.cg-axis-title {
+  fill: var(--text-muted);
+  font-size: 9.5px;
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  opacity: 0.7;
+}

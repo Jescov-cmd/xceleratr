@@ -1,0 +1,249 @@
+/**
+ * Worker thread: runs the WH_MOUSE_LL hook in its own message pump loop.
+ *
+ * Why a worker thread?  koffi synchronous callbacks only fire during a koffi
+ * native call.  In the main process, Electron's message loop (Chromium) drives
+ * PeekMessage — those calls never go through koffi, so the registered callback
+ * is never invoked.  Here in the worker we drive our own PeekMessage pump via
+ * setImmediate, so every pump tick is a koffi native call during which
+ * Windows can deliver the hook.
+ */
+
+import { parentPort } from 'worker_threads'
+
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const koffi   = require('koffi')
+const user32  = koffi.load('user32.dll')
+
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+type CurveType = 'default' | 'linear' | 'natural' | 'power' | 'sigmoid' | 'bounce' | 'classic' | 'jump' | 'custom'
+
+interface CurvePoint { x: number; y: number }
+
+interface CurveSettings {
+  curveType: CurveType
+  customCurvePoints: CurvePoint[]
+  curveAcceleration: number
+  accelerationEnabled: boolean
+  curveThreshold: number
+  curveExponent: number
+  pollingRate: number
+  yxRatio: number
+}
+
+let curve: CurveSettings = {
+  curveType: 'default', customCurvePoints: [],
+  curveAcceleration: 100, accelerationEnabled: true,
+  curveThreshold: 50, curveExponent: 1.5, pollingRate: 1000, yxRatio: 1.0,
+}
+
+// ── Monotone cubic spline (Fritsch-Carlson) ───────────────────────────────────
+
+function monoSpline(pts: CurvePoint[], x: number): number {
+  const n = pts.length
+  if (n === 0) return 1
+  if (n === 1) return pts[0].y
+  if (x <= pts[0].x) return pts[0].y
+  if (x >= pts[n - 1].x) return pts[n - 1].y
+  let k = 0
+  while (k < n - 2 && x > pts[k + 1].x) k++
+  const x0 = pts[k].x, y0 = pts[k].y, x1 = pts[k + 1].x, y1 = pts[k + 1].y
+  const h = x1 - x0
+  if (h < 1e-10) return y0
+  const d = (y1 - y0) / h
+  let m0 = k === 0 ? d : 0.5 * ((pts[k].y - pts[k - 1].y) / (pts[k].x - pts[k - 1].x) + d)
+  let m1 = k === n - 2 ? d : 0.5 * (d + (pts[k + 2].y - pts[k + 1].y) / (pts[k + 2].x - pts[k + 1].x))
+  if (Math.abs(d) < 1e-10) { m0 = m1 = 0 } else {
+    const a = m0 / d, b = m1 / d, tau = a * a + b * b
+    if (tau > 9) { const s = 3 / Math.sqrt(tau); m0 = s * a * d; m1 = s * b * d }
+  }
+  const t = (x - x0) / h, t2 = t * t, t3 = t2 * t
+  return (2*t3 - 3*t2 + 1)*y0 + (t3 - 2*t2 + t)*h*m0 + (-2*t3 + 3*t2)*y1 + (t3 - t2)*h*m1
+}
+
+// ── Curve math ────────────────────────────────────────────────────────────────
+
+function curveMultiplier(speed: number): number {
+  if (!curve.accelerationEnabled || curve.curveType === 'default') return 1
+  const maxSpeed = 60 * (1000 / curve.pollingRate)
+  const x = Math.min(1, speed / maxSpeed)
+  const a = curve.curveAcceleration / 100
+  const t = Math.max(0.05, curve.curveThreshold / 100)
+  switch (curve.curveType) {
+    case 'custom': {
+      const pts = curve.customCurvePoints
+      return pts && pts.length >= 2 ? monoSpline(pts, x) : 1
+    }
+    case 'linear':   return 1 + a * x
+    case 'natural':  return 1 + a * (1 - Math.exp(-(5 / t) * x))
+    case 'power':    return 1 + a * Math.pow(x, Math.max(0.3, curve.curveExponent))
+    case 'sigmoid': {
+      const k = 10 + a * 10
+      const s = (v: number) => 1 / (1 + Math.exp(-k * (v - t)))
+      return 1 + a * (s(x) - s(0)) / (Math.abs(s(1) - s(0)) + 0.001)
+    }
+    case 'bounce':   return 1 + a * (1 - Math.exp(-4 * x) * Math.cos(1.5 * Math.PI * x))
+    case 'classic':  return x < t * 0.5 ? 1 : x < t ? 1 + a * 0.5 : 1 + a
+    case 'jump':     return x < t ? 1 : 1 + a
+    default:         return 1
+  }
+}
+
+// ── Win32 struct / function definitions ──────────────────────────────────────
+
+const POINT_S = koffi.struct('POINT_S', { x: 'int32', y: 'int32' })
+
+const MSLLHOOKSTRUCT_T = koffi.struct('MSLLHOOKSTRUCT', {
+  pt:          POINT_S,
+  mouseData:   'uint32',
+  flags:       'uint32',
+  time:        'uint32',
+  dwExtraInfo: 'uintptr_t',
+})
+
+const MOUSEINPUT_S = koffi.struct('MOUSEINPUT_S', {
+  dx:          'int32',
+  dy:          'int32',
+  mouseData:   'uint32',
+  dwFlags:     'uint32',
+  time:        'uint32',
+  dwExtraInfo: 'uintptr_t',
+})
+const KEYBDINPUT_S = koffi.struct('KEYBDINPUT_S', {
+  wVk:         'uint16',
+  wScan:       'uint16',
+  dwFlags:     'uint32',
+  time:        'uint32',
+  dwExtraInfo: 'uintptr_t',
+})
+const INPUT_T = koffi.struct('INPUT_T', {
+  type: 'uint32',
+  u:    koffi.union('INPUT_UNION', { mi: MOUSEINPUT_S, ki: KEYBDINPUT_S }),
+})
+
+const MSG_S = koffi.struct('MSG_S', {
+  hwnd:     'void*',
+  message:  'uint32',
+  wParam:   'uintptr_t',
+  lParam:   'intptr_t',
+  time:     'uint32',
+  pt:       POINT_S,
+  lPrivate: 'uint32',
+})
+
+// koffi's string-based func() parser does not support callback-pointer params
+// (e.g. "HookProto *lpfn"). Use void* and pass the koffi.register() result directly.
+const HookProto    = koffi.proto('intptr_t __stdcall HookProto(int32 nCode, uintptr_t wParam, void *lParam)')
+const SetHookEx    = user32.func('void* SetWindowsHookExW(int32 idHook, void* lpfn, void* hmod, uint32 dwThreadId)')
+const CallNextHook = user32.func('intptr_t CallNextHookEx(void* hhk, int32 nCode, uintptr_t wParam, void *lParam)')
+const UnhookHook   = user32.func('bool UnhookWindowsHookEx(void* hhk)')
+const SendInput    = user32.func('uint32 SendInput(uint32 cInputs, INPUT_T *pInputs, int32 cbSize)')
+const GetSysMetric = user32.func('int32 GetSystemMetrics(int32 nIndex)')
+const PeekMsg      = user32.func('bool PeekMessageW(MSG_S *lpMsg, void* hWnd, uint32 wMsgFilterMin, uint32 wMsgFilterMax, uint32 wRemoveMsg)')
+const TranslateMsg = user32.func('bool TranslateMessage(MSG_S *lpMsg)')
+const DispatchMsg  = user32.func('intptr_t DispatchMessageW(MSG_S *lpMsg)')
+
+const INPUT_SIZE = koffi.sizeof(INPUT_T)
+
+// ── Hook state ────────────────────────────────────────────────────────────────
+
+let hookHandle: any = null
+let prevX = -1, prevY = -1
+
+const hookCb = koffi.register((nCode: number, wParam: number | bigint, lParam: number | bigint) => {
+  try {
+    if (nCode < 0) return CallNextHook(null, nCode, wParam, lParam)
+    if (Number(wParam) !== 0x200 /* WM_MOUSEMOVE */) return CallNextHook(null, nCode, wParam, lParam)
+
+    const ms = koffi.decode(lParam, MSLLHOOKSTRUCT_T)
+    if (ms.flags & 0x01) return CallNextHook(null, nCode, wParam, lParam) // LLMHF_INJECTED — our own event
+
+    const x = ms.pt.x, y = ms.pt.y
+    if (prevX === -1) { prevX = x; prevY = y; return CallNextHook(null, nCode, wParam, lParam) }
+
+    const dx = x - prevX, dy = y - prevY
+    const speed = Math.sqrt(dx * dx + dy * dy)
+    const mult  = curveMultiplier(speed)
+
+    const ratio = curve.yxRatio
+    if (speed < 0.5 || (Math.abs(mult - 1) < 0.02 && Math.abs(ratio - 1) < 0.02)) {
+      prevX = x; prevY = y
+      return CallNextHook(null, nCode, wParam, lParam)
+    }
+
+    // Multi-monitor: use virtual desktop space
+    const vw = GetSysMetric(78), vh = GetSysMetric(79)  // SM_CXVIRTUALSCREEN, SM_CYVIRTUALSCREEN
+    const vx = GetSysMetric(76), vy = GetSysMetric(77)  // SM_XVIRTUALSCREEN,  SM_YVIRTUALSCREEN
+
+    const tx = Math.max(vx, Math.min(vx + vw - 1, Math.round(prevX + dx * mult)))
+    const ty = Math.max(vy, Math.min(vy + vh - 1, Math.round(prevY + dy * mult * ratio)))
+    prevX = tx; prevY = ty
+
+    const normX = Math.round(((tx - vx) / Math.max(1, vw - 1)) * 65535)
+    const normY = Math.round(((ty - vy) / Math.max(1, vh - 1)) * 65535)
+
+    // MOUSEEVENTF_MOVE(0x0001) | MOUSEEVENTF_ABSOLUTE(0x8000) | MOUSEEVENTF_VIRTUALDESK(0x4000)
+    const sent = SendInput(1, [{ type: 0, u: { mi: {
+      dx: normX, dy: normY, mouseData: 0, dwFlags: 0xC001, time: 0, dwExtraInfo: 0,
+    } } }], INPUT_SIZE)
+
+    if (!_dbgSent) {
+      _dbgSent = true
+      parentPort?.postMessage({ type: 'debug', speed: speed.toFixed(2), mult: mult.toFixed(2), sent })
+    }
+
+    return 1  // block original event — our injected event carries the curve-adjusted movement
+  } catch(e) {
+    parentPort?.postMessage({ type: 'error', msg: String(e) })
+    return CallNextHook(null, nCode, wParam, lParam)
+  }
+}, koffi.pointer(HookProto))
+
+let _dbgSent = false
+
+function install() {
+  if (hookHandle) { UnhookHook(hookHandle); hookHandle = null }
+  const needsRatio = Math.abs(curve.yxRatio - 1) > 0.02
+  if ((curve.curveType === 'default' || !curve.accelerationEnabled) && !needsRatio) return
+  prevX = -1; prevY = -1
+  hookHandle = SetHookEx(14 /* WH_MOUSE_LL */, hookCb, null, 0)
+}
+
+function uninstall() {
+  if (hookHandle) { UnhookHook(hookHandle); hookHandle = null }
+}
+
+// ── Message pump ──────────────────────────────────────────────────────────────
+// PeekMessage is a koffi native call — the WH_MOUSE_LL hook fires during it,
+// allowing koffi synchronous callbacks to invoke our JS code.
+
+const winMsg: any = {}
+let running = true
+
+function pump() {
+  if (!running) return
+  try {
+    while (PeekMsg(winMsg, null, 0, 0, 1 /* PM_REMOVE */)) {
+      TranslateMsg(winMsg)
+      DispatchMsg(winMsg)
+    }
+  } catch { /* no-op */ }
+  setImmediate(pump)  // yield so parentPort messages can be received
+}
+
+// ── IPC from main process ─────────────────────────────────────────────────────
+
+parentPort?.on('message', (data: { type: string; curve?: CurveSettings }) => {
+  if (data.type === 'apply' && data.curve) {
+    curve = data.curve
+    install()
+  } else if (data.type === 'stop') {
+    running = false
+    uninstall()
+    process.exit(0)
+  }
+})
+
+pump()
+parentPort?.postMessage({ type: 'ready' })

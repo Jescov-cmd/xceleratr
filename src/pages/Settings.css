@@ -1,0 +1,106 @@
+/* Dirty / unsaved indicator */
+.save-btn-dirty {
+  background: var(--accent);
+  box-shadow: 0 0 0 2px rgba(124, 111, 255, 0.35);
+  animation: pulse-border 1.8s ease-in-out infinite;
+}
+
+@keyframes pulse-border {
+  0%, 100% { box-shadow: 0 0 0 2px rgba(124, 111, 255, 0.35); }
+  50%       { box-shadow: 0 0 0 5px rgba(124, 111, 255, 0.0); }
+}
+
+.save-dirty-label {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  font-weight: 500;
+  opacity: 0.65;
+}
+
+/* Custom curve button */
+.curve-btn-custom {
+  border-color: var(--accent);
+  color: var(--active-text);
+}
+
+.curve-btn-custom:not(.curve-btn-active) {
+  border-color: rgba(124, 111, 255, 0.45);
+  color: var(--active-text);
+}
+
+/* Curve type picker */
+.curve-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 20px;
+}
+
+.curve-btn {
+  padding: 7px 14px;
+  border: 1.5px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-secondary);
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 12.5px;
+  font-weight: 500;
+  font-family: inherit;
+  transition: border-color 0.12s, background 0.12s, color 0.12s;
+  letter-spacing: 0.01em;
+}
+
+.curve-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+  border-color: var(--text-muted);
+}
+
+.curve-btn-active {
+  border-color: var(--accent) !important;
+  background: var(--active-bg) !important;
+  color: var(--active-text) !important;
+}
+
+/* Theme picker */
+.theme-picker {
+  display: flex;
+  gap: 10px;
+}
+
+.theme-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-secondary);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  font-family: inherit;
+  transition: border-color 0.12s, background 0.12s;
+}
+
+.theme-btn:hover {
+  background: var(--bg-hover);
+}
+
+.theme-btn-active {
+  border-color: var(--accent);
+  background: var(--bg-hover);
+}
+
+.theme-swatch {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1px solid rgba(128,128,128,0.25);
+  flex-shrink: 0;
+}
+
+.swatch-light { background: #ffffff; }
+.swatch-dark  { background: #000000; }
+.swatch-hc    { background: #000000; border: 2px solid #ffff00; }
