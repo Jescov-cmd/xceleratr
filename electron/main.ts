@@ -184,6 +184,18 @@ function startHookWorker(curve: {
   }, 80)
 }
 
+// ── Icon loader ───────────────────────────────────────────────────────────────
+// nativeImage.createFromPath() cannot read from inside an asar archive.
+// fs.readFileSync() is asar-aware in Electron, so we load the raw bytes first.
+
+function loadNativeImage(relPath: string): Electron.NativeImage {
+  try {
+    const p = path.join(__dirname, relPath)
+    if (fs.existsSync(p)) return nativeImage.createFromBuffer(fs.readFileSync(p))
+  } catch { /* no-op */ }
+  return nativeImage.createEmpty()
+}
+
 // ── Window ────────────────────────────────────────────────────────────────────
 
 let mainWindow: BrowserWindow | null = null
@@ -191,7 +203,7 @@ let tray:       Tray        | null = null
 let isQuitting = false
 
 function createWindow() {
-  const icoPath = path.join(__dirname, '../public/icon.ico')
+  const icon = loadNativeImage(IS_MAC ? '../dist/tray.png' : '../dist/icon.ico')
   mainWindow = new BrowserWindow({
     width: 860, height: 600, minWidth: 700, minHeight: 480,
     frame: false,
@@ -199,7 +211,7 @@ function createWindow() {
     backgroundColor: '#00000000',
     hasShadow: false,
     show: !startedAtBoot,
-    icon: fs.existsSync(icoPath) ? icoPath : undefined,
+    icon: icon.isEmpty() ? undefined : icon,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -224,14 +236,9 @@ function createWindow() {
 
 function createTray() {
   try {
-    const pngPath = path.join(__dirname, '../public/tray.png')
-    const icoPath = path.join(__dirname, '../public/icon.ico')
-    const iconFile = IS_MAC && fs.existsSync(pngPath) ? pngPath
-      : fs.existsSync(icoPath) ? icoPath
-      : pngPath
-    const icon = fs.existsSync(iconFile)
-      ? nativeImage.createFromPath(iconFile).resize({ width: 16, height: 16 })
-      : nativeImage.createEmpty()
+    // Load via buffer — createFromPath() silently fails inside asar archives
+    const raw = loadNativeImage('../dist/tray.png')
+    const icon = raw.isEmpty() ? raw : raw.resize({ width: 16, height: 16 })
 
     tray = new Tray(icon)
     tray.setToolTip('Xceleratr')
@@ -270,9 +277,20 @@ app.on('activate', () => {
 
 app.on('window-all-closed', () => { /* stay in tray — quit via tray menu only */ })
 app.on('before-quit', () => { isQuitting = true })
-app.on('will-quit', () => {
-  stopHookWorker()
-  if (IS_WIN) restoreOriginals()
+
+let _cleanupDone = false
+app.on('will-quit', (e) => {
+  if (_cleanupDone) return
+  _cleanupDone = true
+  e.preventDefault()           // pause Electron's quit so we can finish cleanup
+
+  tray?.destroy(); tray = null  // must destroy tray or it keeps the process alive
+  if (IS_WIN) restoreOriginals() // sync — registry fully restored before worker exits
+  stopHookWorker()               // tell hook worker to stop (it unregisters the hook)
+
+  // Force-kill after 300 ms — koffi native refs in the worker thread can otherwise
+  // prevent Node.js from exiting even after app.quit() completes.
+  setTimeout(() => process.exit(0), 300)
 })
 
 // ── Window controls ───────────────────────────────────────────────────────────

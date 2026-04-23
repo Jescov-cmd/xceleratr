@@ -243,7 +243,7 @@ parentPort?.on('message', (data: { type: string; curve?: CurveSettings }) => {
   } else if (data.type === 'stop') {
     running = false
     uninstall()
-    parentPort?.close()  // let thread exit naturally — process.exit() here would race with main-thread restoreOriginals()
+    process.exit(0)  // safe — main thread always calls restoreOriginals() before sending 'stop'
   }
 })
 
