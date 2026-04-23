@@ -5,9 +5,10 @@ import { Worker } from 'worker_threads'
 import fs from 'fs'
 import os from 'os'
 
-const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged
-const IS_WIN = process.platform === 'win32'
-const IS_MAC = process.platform === 'darwin'
+const isDev        = process.env.NODE_ENV === 'development' || !app.isPackaged
+const IS_WIN       = process.platform === 'win32'
+const IS_MAC       = process.platform === 'darwin'
+const startedAtBoot = process.argv.includes('--startup')
 
 // Suppress Chromium GPU shader disk-cache errors (harmless, just noisy in dev)
 app.commandLine.appendSwitch('disable-gpu-shader-disk-cache')
@@ -197,6 +198,7 @@ function createWindow() {
     transparent: true,
     backgroundColor: '#00000000',
     hasShadow: false,
+    show: !startedAtBoot,
     icon: fs.existsSync(icoPath) ? icoPath : undefined,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -401,7 +403,10 @@ function getStartupWin(): boolean {
 function setStartupWin(enable: boolean) {
   try {
     if (enable) {
-      execFileSync('reg.exe', ['add', WIN_RUN, '/v', APP_NAME, '/t', 'REG_SZ', '/d', process.execPath, '/f'],
+      // Quote the exe path (may contain spaces) and add --startup so the app
+      // knows to start silently in the tray rather than showing the window
+      const startupCmd = `"${process.execPath}" --startup`
+      execFileSync('reg.exe', ['add', WIN_RUN, '/v', APP_NAME, '/t', 'REG_SZ', '/d', startupCmd, '/f'],
         { windowsHide: true })
     } else {
       execFileSync('reg.exe', ['delete', WIN_RUN, '/v', APP_NAME, '/f'], { windowsHide: true })
