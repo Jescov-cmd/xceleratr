@@ -192,13 +192,13 @@ let tray:       Tray        | null = null
 let isQuitting = false
 
 function createWindow() {
-  const s = loadSettings()
   const icoPath = path.join(__dirname, '../public/icon.ico')
   mainWindow = new BrowserWindow({
     width: 860, height: 600, minWidth: 700, minHeight: 480,
     frame: false,
     transparent: true,
     backgroundColor: '#00000000',
+    hasShadow: false,
     icon: fs.existsSync(icoPath) ? icoPath : undefined,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -223,19 +223,27 @@ function createWindow() {
 }
 
 function createTray() {
-  const iconPath = path.join(__dirname, '../public/icon.ico')
-  const icon = fs.existsSync(iconPath)
-    ? nativeImage.createFromPath(iconPath).resize({ width: 16, height: 16 })
-    : nativeImage.createEmpty()
+  try {
+    const pngPath = path.join(__dirname, '../public/tray.png')
+    const icoPath = path.join(__dirname, '../public/icon.ico')
+    const iconFile = IS_MAC && fs.existsSync(pngPath) ? pngPath
+      : fs.existsSync(icoPath) ? icoPath
+      : pngPath
+    const icon = fs.existsSync(iconFile)
+      ? nativeImage.createFromPath(iconFile).resize({ width: 16, height: 16 })
+      : nativeImage.createEmpty()
 
-  tray = new Tray(icon)
-  tray.setToolTip('Xceleratr')
-  tray.setContextMenu(Menu.buildFromTemplate([
-    { label: 'Show Xceleratr', click: () => { mainWindow?.show(); mainWindow?.focus() } },
-    { type: 'separator' },
-    { label: 'Quit', click: () => { isQuitting = true; app.quit() } },
-  ]))
-  tray.on('double-click', () => { mainWindow?.show(); mainWindow?.focus() })
+    tray = new Tray(icon)
+    tray.setToolTip('Xceleratr')
+    tray.setContextMenu(Menu.buildFromTemplate([
+      { label: 'Show Xceleratr', click: () => { mainWindow?.show(); mainWindow?.focus() } },
+      { type: 'separator' },
+      { label: 'Quit', click: () => { isQuitting = true; app.quit() } },
+    ]))
+    tray.on('double-click', () => { mainWindow?.show(); mainWindow?.focus() })
+  } catch (e) {
+    if (isDev) console.error('[xceleratr] tray creation failed:', e)
+  }
 }
 
 app.whenReady().then(() => {
@@ -246,8 +254,18 @@ app.whenReady().then(() => {
   createTray()
   // Apply saved settings immediately so the hook is active from launch
   const s = loadSettings()
-  if (IS_WIN) applyWin(s)
-  if (IS_MAC) applyMac(s)
+  try {
+    if (IS_WIN) applyWin(s)
+    if (IS_MAC) applyMac(s)
+  } catch (e) {
+    if (isDev) console.error('[xceleratr] initial apply failed:', e)
+  }
+})
+
+// On Mac, clicking the dock icon re-shows the window
+app.on('activate', () => {
+  if (mainWindow) { mainWindow.show(); mainWindow.focus() }
+  else createWindow()
 })
 
 app.on('window-all-closed', () => { /* stay in tray — quit via tray menu only */ })
@@ -348,10 +366,12 @@ function applyMac(s: { sensitivity: number; sensitivityEnabled: boolean; acceler
     if (!s.accelerationEnabled) {
       execSync('defaults write -g com.apple.mouse.scaling -1', { stdio: 'ignore' })
     } else if (s.sensitivityEnabled) {
-      const scale = Math.max(0.1, (s.sensitivity / 20) * 2.0)
-      execSync(`defaults write -g com.apple.mouse.scaling ${scale.toFixed(2)}`, { stdio: 'ignore' })
+      // Piecewise linear: sensitivity 10 = macOS default (0.6875), 1 = 0.1, 20 = 3.0
+      const scale = s.sensitivity <= 10
+        ? 0.1 + (s.sensitivity - 1) * ((0.6875 - 0.1) / 9)
+        : 0.6875 + (s.sensitivity - 10) * ((3.0 - 0.6875) / 10)
+      execSync(`defaults write -g com.apple.mouse.scaling ${scale.toFixed(4)}`, { stdio: 'ignore' })
     }
-    execSync('killall cfprefsd', { stdio: 'ignore' })
   } catch { /* no-op */ }
 }
 

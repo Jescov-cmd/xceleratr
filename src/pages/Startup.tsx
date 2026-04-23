@@ -10,6 +10,7 @@ interface Props {
 export default function Startup({ settings, updateSettings }: Props) {
   const [startOnBoot, setStartOnBoot] = useState(settings.startOnBoot)
   const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+  const isMac = window.api?.platform === 'darwin'
 
   useEffect(() => {
     window.api?.getStartup().then((r) => setStartOnBoot(r.enabled)).catch(() => {})
@@ -33,7 +34,7 @@ export default function Startup({ settings, updateSettings }: Props) {
     <div className="page">
       <div className="page-header">
         <h1 className="page-title">Startup</h1>
-        <p className="page-sub">Control how Xceleratr launches with Windows</p>
+        <p className="page-sub">Control how Xceleratr launches at login</p>
       </div>
 
       <section className="section">
@@ -41,7 +42,7 @@ export default function Startup({ settings, updateSettings }: Props) {
 
         <div className="field">
           <div className="field-header">
-            <label className="field-label">Launch on Windows startup</label>
+            <label className="field-label">Launch on {isMac ? 'Mac' : 'Windows'} startup</label>
             <button
               role="switch"
               aria-checked={startOnBoot}
@@ -52,17 +53,30 @@ export default function Startup({ settings, updateSettings }: Props) {
             </button>
           </div>
           <div className="field-hint">
-            Registers Xceleratr in the Windows Registry Run key so it starts automatically when you log in.
+            {isMac
+              ? 'Registers Xceleratr as a Login Item so it launches automatically when you log in.'
+              : 'Registers Xceleratr in the Windows Registry Run key so it starts automatically when you log in.'}
           </div>
         </div>
 
         <div className="info-box">
           <div className="info-title">How it works</div>
           <ul className="info-list">
-            <li>Adds an entry to <code>HKCU\Software\Microsoft\Windows\CurrentVersion\Run</code></li>
-            <li>Xceleratr will launch minimized in the background on every Windows login</li>
-            <li>Your last saved mouse settings are applied automatically at startup</li>
-            <li>Toggle this off to remove the registry entry</li>
+            {isMac ? (
+              <>
+                <li>Adds a LaunchAgent to <code>~/Library/LaunchAgents/</code></li>
+                <li>Xceleratr will launch in the background on every login</li>
+                <li>Your last saved mouse settings are applied automatically</li>
+                <li>Toggle this off to remove the LaunchAgent</li>
+              </>
+            ) : (
+              <>
+                <li>Adds an entry to <code>HKCU\Software\Microsoft\Windows\CurrentVersion\Run</code></li>
+                <li>Xceleratr will launch minimized in the background on every Windows login</li>
+                <li>Your last saved mouse settings are applied automatically at startup</li>
+                <li>Toggle this off to remove the registry entry</li>
+              </>
+            )}
           </ul>
         </div>
       </section>
@@ -75,7 +89,7 @@ export default function Startup({ settings, updateSettings }: Props) {
           {status === 'idle' && 'Save Startup Settings'}
         </button>
         {status === 'saved' && <span className="save-status ok">{startOnBoot ? 'Startup enabled' : 'Startup disabled'}</span>}
-        {status === 'error' && <span className="save-status err">Failed. Run as Administrator.</span>}
+        {status === 'error' && <span className="save-status err">Failed to update startup settings.</span>}
       </div>
     </div>
   )
