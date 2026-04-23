@@ -3,26 +3,20 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 10px 0 18px;
+  padding: 0 10px 0 10px;
   -webkit-app-region: drag;
   flex-shrink: 0;
   border-bottom: 1px solid var(--border);
   background: var(--bg-secondary);
   border-radius: 10px 10px 0 0;
+  position: relative;
 }
 
 .titlebar-brand {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.titlebar-icon {
-  width: 18px;
-  height: 18px;
-  image-rendering: pixelated;
-  opacity: 0.85;
-  flex-shrink: 0;
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  pointer-events: none;
 }
 
 .titlebar-name {
@@ -38,6 +32,7 @@
   display: flex;
   gap: 2px;
   -webkit-app-region: no-drag;
+  margin-left: auto;
 }
 
 .ctrl-btn {

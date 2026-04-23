@@ -1,11 +1,9 @@
-import mouseIcon from '../assets/mouse.png'
 import './TitleBar.css'
 
 export default function TitleBar() {
   return (
     <div className="titlebar" data-drag="true">
       <div className="titlebar-brand">
-        <img src={mouseIcon} alt="" className="titlebar-icon" />
         <span className="titlebar-name">Xceleratr</span>
       </div>
       <div className="titlebar-controls">
