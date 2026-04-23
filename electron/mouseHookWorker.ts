@@ -139,8 +139,8 @@ const SetHookEx    = user32.func('void* SetWindowsHookExW(int32 idHook, void* lp
 const CallNextHook = user32.func('intptr_t CallNextHookEx(void* hhk, int32 nCode, uintptr_t wParam, void *lParam)')
 const UnhookHook   = user32.func('bool UnhookWindowsHookEx(void* hhk)')
 const SendInput    = user32.func('uint32 SendInput(uint32 cInputs, INPUT_T *pInputs, int32 cbSize)')
-const GetSysMetric = user32.func('int32 GetSystemMetrics(int32 nIndex)')
 const PeekMsg      = user32.func('bool PeekMessageW(MSG_S *lpMsg, void* hWnd, uint32 wMsgFilterMin, uint32 wMsgFilterMax, uint32 wRemoveMsg)')
+const GetSysMetric = user32.func('int32 GetSystemMetrics(int32 nIndex)')
 const TranslateMsg = user32.func('bool TranslateMessage(MSG_S *lpMsg)')
 const DispatchMsg  = user32.func('intptr_t DispatchMessageW(MSG_S *lpMsg)')
 
@@ -150,6 +150,9 @@ const INPUT_SIZE = koffi.sizeof(INPUT_T)
 
 let hookHandle: any = null
 let prevX = -1, prevY = -1
+
+// Screen bounds cached in install() — avoids 4 FFI calls per mouse event
+let screenVx = 0, screenVy = 0, screenVw = 1920, screenVh = 1080
 
 const hookCb = koffi.register((nCode: number, wParam: number | bigint, lParam: number | bigint) => {
   try {
@@ -165,27 +168,23 @@ const hookCb = koffi.register((nCode: number, wParam: number | bigint, lParam: n
     const dx = x - prevX, dy = y - prevY
     const speed = Math.sqrt(dx * dx + dy * dy)
     const mult  = curveMultiplier(speed)
-
     const ratio = curve.yxRatio
+
     if (speed < 0.5 || (Math.abs(mult - 1) < 0.02 && Math.abs(ratio - 1) < 0.02)) {
       prevX = x; prevY = y
       return CallNextHook(null, nCode, wParam, lParam)
     }
 
-    // Multi-monitor: use virtual desktop space
-    const vw = GetSysMetric(78), vh = GetSysMetric(79)  // SM_CXVIRTUALSCREEN, SM_CYVIRTUALSCREEN
-    const vx = GetSysMetric(76), vy = GetSysMetric(77)  // SM_XVIRTUALSCREEN,  SM_YVIRTUALSCREEN
+    const newDx = Math.round(dx * mult)
+    const newDy = Math.round(dy * mult * ratio)
 
-    const tx = Math.max(vx, Math.min(vx + vw - 1, Math.round(prevX + dx * mult)))
-    const ty = Math.max(vy, Math.min(vy + vh - 1, Math.round(prevY + dy * mult * ratio)))
-    prevX = tx; prevY = ty
+    // Update cursor tracking, clamped to screen bounds so edge events don't desync prevX/prevY
+    prevX = Math.max(screenVx, Math.min(screenVx + screenVw - 1, prevX + newDx))
+    prevY = Math.max(screenVy, Math.min(screenVy + screenVh - 1, prevY + newDy))
 
-    const normX = Math.round(((tx - vx) / Math.max(1, vw - 1)) * 65535)
-    const normY = Math.round(((ty - vy) / Math.max(1, vh - 1)) * 65535)
-
-    // MOUSEEVENTF_MOVE(0x0001) | MOUSEEVENTF_ABSOLUTE(0x8000) | MOUSEEVENTF_VIRTUALDESK(0x4000)
+    // MOUSEEVENTF_MOVE (0x0001) relative — simpler than absolute, no normalization artifacts
     const sent = SendInput(1, [{ type: 0, u: { mi: {
-      dx: normX, dy: normY, mouseData: 0, dwFlags: 0xC001, time: 0, dwExtraInfo: 0,
+      dx: newDx, dy: newDy, mouseData: 0, dwFlags: 0x0001, time: 0, dwExtraInfo: 0,
     } } }], INPUT_SIZE)
 
     if (!_dbgSent) {
@@ -193,7 +192,7 @@ const hookCb = koffi.register((nCode: number, wParam: number | bigint, lParam: n
       parentPort?.postMessage({ type: 'debug', speed: speed.toFixed(2), mult: mult.toFixed(2), sent })
     }
 
-    return 1  // block original event — our injected event carries the curve-adjusted movement
+    return 1  // block original event — our injected relative event carries the curve-adjusted movement
   } catch(e) {
     parentPort?.postMessage({ type: 'error', msg: String(e) })
     return CallNextHook(null, nCode, wParam, lParam)
@@ -206,6 +205,9 @@ function install() {
   if (hookHandle) { UnhookHook(hookHandle); hookHandle = null }
   const needsRatio = Math.abs(curve.yxRatio - 1) > 0.02
   if ((curve.curveType === 'default' || !curve.accelerationEnabled) && !needsRatio) return
+  // Cache screen bounds once per settings-apply instead of on every mouse event
+  screenVx = GetSysMetric(76); screenVy = GetSysMetric(77)
+  screenVw = GetSysMetric(78); screenVh = GetSysMetric(79)
   prevX = -1; prevY = -1
   hookHandle = SetHookEx(14 /* WH_MOUSE_LL */, hookCb, null, 0)
 }

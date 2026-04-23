@@ -1,6 +1,6 @@
 import { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage } from 'electron'
 import path from 'path'
-import { execSync } from 'child_process'
+import { execFileSync } from 'child_process'
 import { Worker } from 'worker_threads'
 import fs from 'fs'
 import os from 'os'
@@ -81,10 +81,8 @@ let origMouse: OrigMouse | null = null   // set once before first write
 
 function regRead(name: string): string {
   try {
-    const out = execSync(
-      `reg.exe query "HKCU\\Control Panel\\Mouse" /v "${name}"`,
-      { encoding: 'utf8', windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'] }
-    ).trim()
+    const out = execFileSync('reg.exe', ['query', 'HKCU\\Control Panel\\Mouse', '/v', name],
+      { encoding: 'utf8', windowsHide: true }).trim()
     const m = out.match(/REG_SZ\s+(\S+)/)
     return m ? m[1].trim() : ''
   } catch { return '' }
@@ -291,15 +289,13 @@ ipcMain.handle('settings-save', (_e, patch: Partial<Settings>) => {
 
 function regWrite(name: string, value: string) {
   try {
-    execSync(
-      `reg.exe add "HKCU\\Control Panel\\Mouse" /v "${name}" /t REG_SZ /d "${value}" /f`,
-      { stdio: 'ignore', windowsHide: true }
-    )
+    execFileSync('reg.exe', ['add', 'HKCU\\Control Panel\\Mouse', '/v', name, '/t', 'REG_SZ', '/d', value, '/f'],
+      { windowsHide: true })
   } catch { /* no-op */ }
 }
 
 function applyWin(s: {
-  sensitivity: number; sensitivityEnabled: boolean; yxRatio: number
+  sensitivity: number; sensitivityEnabled: boolean; yxRatio: number; yxRatioEnabled: boolean
   curveType: CurveType; customCurvePoints: CurvePoint[]
   curveAcceleration: number; accelerationEnabled: boolean
   curveThreshold: number; curveExponent: number; enhancePointerPrecision: boolean
@@ -320,7 +316,8 @@ function applyWin(s: {
   }
 
   // ── Acceleration ──
-  const useHook = (s.accelerationEnabled && s.curveType !== 'default') || Math.abs(s.yxRatio - 1) > 0.02
+  const effectiveRatio = s.yxRatioEnabled ? s.yxRatio : 1.0
+  const useHook = (s.accelerationEnabled && s.curveType !== 'default') || Math.abs(effectiveRatio - 1) > 0.02
   // 'custom' with no points = treat as default
   const useEPP  = s.enhancePointerPrecision && !useHook
 
@@ -354,7 +351,7 @@ function applyWin(s: {
       curveThreshold:      s.curveThreshold,
       curveExponent:       s.curveExponent,
       pollingRate:         s.pollingRate,
-      yxRatio:             s.yxRatio,
+      yxRatio:             effectiveRatio,
     })
   } else {
     stopHookWorker()
@@ -364,13 +361,13 @@ function applyWin(s: {
 function applyMac(s: { sensitivity: number; sensitivityEnabled: boolean; accelerationEnabled: boolean; yxRatio: number }) {
   try {
     if (!s.accelerationEnabled) {
-      execSync('defaults write -g com.apple.mouse.scaling -1', { stdio: 'ignore' })
+      execFileSync('defaults', ['write', '-g', 'com.apple.mouse.scaling', '-1'], { stdio: 'ignore' })
     } else if (s.sensitivityEnabled) {
       // Piecewise linear: sensitivity 10 = macOS default (0.6875), 1 = 0.1, 20 = 3.0
       const scale = s.sensitivity <= 10
         ? 0.1 + (s.sensitivity - 1) * ((0.6875 - 0.1) / 9)
         : 0.6875 + (s.sensitivity - 10) * ((3.0 - 0.6875) / 10)
-      execSync(`defaults write -g com.apple.mouse.scaling ${scale.toFixed(4)}`, { stdio: 'ignore' })
+      execFileSync('defaults', ['write', '-g', 'com.apple.mouse.scaling', scale.toFixed(4)], { stdio: 'ignore' })
     }
   } catch { /* no-op */ }
 }
@@ -396,17 +393,17 @@ const MAC_PLIST = path.join(os.homedir(), 'Library/LaunchAgents/com.xceleratr.ap
 
 function getStartupWin(): boolean {
   try {
-    const out = execSync(`reg.exe query "${WIN_RUN}" /v "${APP_NAME}"`,
-      { encoding: 'utf8', windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'] }).trim()
+    const out = execFileSync('reg.exe', ['query', WIN_RUN, '/v', APP_NAME],
+      { encoding: 'utf8', windowsHide: true }).trim()
     return out.includes(APP_NAME)
   } catch { return false }
 }
 function setStartupWin(enable: boolean) {
   if (enable) {
-    execSync(`reg.exe add "${WIN_RUN}" /v "${APP_NAME}" /t REG_SZ /d "${process.execPath}" /f`,
-      { stdio: 'ignore', windowsHide: true })
+    execFileSync('reg.exe', ['add', WIN_RUN, '/v', APP_NAME, '/t', 'REG_SZ', '/d', process.execPath, '/f'],
+      { windowsHide: true })
   } else {
-    try { execSync(`reg.exe delete "${WIN_RUN}" /v "${APP_NAME}" /f 2>nul`, { stdio: 'ignore', windowsHide: true }) }
+    try { execFileSync('reg.exe', ['delete', WIN_RUN, '/v', APP_NAME, '/f'], { windowsHide: true }) }
     catch { /* didn't exist */ }
   }
 }
@@ -425,9 +422,9 @@ function setStartupMac(enable: boolean) {
 </plist>`
     fs.mkdirSync(path.dirname(MAC_PLIST), { recursive: true })
     fs.writeFileSync(MAC_PLIST, plist, 'utf-8')
-    try { execSync(`launchctl load "${MAC_PLIST}"`, { stdio: 'ignore' }) } catch {}
+    try { execFileSync('launchctl', ['load', MAC_PLIST], { stdio: 'ignore' }) } catch {}
   } else {
-    try { execSync(`launchctl unload "${MAC_PLIST}"`, { stdio: 'ignore' }) } catch {}
+    try { execFileSync('launchctl', ['unload', MAC_PLIST], { stdio: 'ignore' }) } catch {}
     try { fs.unlinkSync(MAC_PLIST) } catch {}
   }
 }
