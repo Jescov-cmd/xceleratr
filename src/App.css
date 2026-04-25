@@ -1,0 +1,28 @@
+.app {
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: transparent;
+  color: var(--text);
+  overflow: hidden;
+  border-radius: 8px;
+  border: 1px solid var(--window-border);
+}
+
+.layout {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+.content {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 28px 32px;
+  background: var(--bg);
+  -webkit-app-region: no-drag;
+  contain: paint;
+  isolation: isolate;
+}

@@ -1,0 +1,132 @@
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+html, body {
+  background: transparent;
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+input, textarea, [contenteditable] {
+  user-select: text;
+  -webkit-user-select: text;
+  -webkit-app-region: no-drag;
+}
+
+/* ── Dark theme — Windows 11 Dark ────────────────────────────────────────── */
+.theme-dark {
+  --bg: #202020;
+  --bg-secondary: #2b2b2b;
+  --bg-panel: #303030;
+  --bg-hover: rgba(255, 255, 255, 0.0605);
+  --border: rgba(255, 255, 255, 0.0837);
+  --window-border: rgba(255, 255, 255, 0.12);
+  --text: #ffffff;
+  --text-muted: rgba(255, 255, 255, 0.6);
+  --accent: #0078D4;
+  --accent-text: #ffffff;
+  --active-bg: rgba(0, 120, 212, 0.18);
+  --active-text: #60cdff;
+  --active-border: #0078D4;
+  --input-bg: rgba(255, 255, 255, 0.0605);
+  --input-border: rgba(255, 255, 255, 0.0837);
+  --input-focus: #0078D4;
+  --track-bg: rgba(255, 255, 255, 0.18);
+  --track-fill: #0078D4;
+  --thumb: #0078D4;
+  --success: #6ccb5f;
+  --danger: #ff6b6b;
+  --shadow: rgba(0, 0, 0, 0.5);
+  --glow-shadow: none;
+}
+
+/* ── Light theme — Windows 11 Light ─────────────────────────────────────── */
+.theme-light {
+  --bg: #f3f3f3;
+  --bg-secondary: #ffffff;
+  --bg-panel: #f9f9f9;
+  --bg-hover: rgba(0, 0, 0, 0.0373);
+  --border: rgba(0, 0, 0, 0.073);
+  --window-border: rgba(0, 0, 0, 0.14);
+  --text: rgba(0, 0, 0, 0.8956);
+  --text-muted: rgba(0, 0, 0, 0.55);
+  --accent: #0067c0;
+  --accent-text: #ffffff;
+  --active-bg: rgba(0, 103, 192, 0.1);
+  --active-text: #0067c0;
+  --active-border: #0067c0;
+  --input-bg: rgba(255, 255, 255, 0.7);
+  --input-border: rgba(0, 0, 0, 0.073);
+  --input-focus: #0067c0;
+  --track-bg: rgba(0, 0, 0, 0.1);
+  --track-fill: #0067c0;
+  --thumb: #0067c0;
+  --success: #0f7b0f;
+  --danger: #c42b1c;
+  --shadow: rgba(0, 0, 0, 0.12);
+  --glow-shadow: none;
+}
+
+/* ── High Contrast theme — Windows 11 High Contrast Black ───────────────── */
+.theme-high-contrast {
+  --bg: #000000;
+  --bg-secondary: #000000;
+  --bg-panel: #000000;
+  --bg-hover: rgba(255, 255, 255, 0.1);
+  --border: #ffffff;
+  --window-border: #ffffff;
+  --text: #ffffff;
+  --text-muted: #3ff23f;
+  --accent: #1aebff;
+  --accent-text: #000000;
+  --active-bg: #1aebff;
+  --active-text: #000000;
+  --active-border: #1aebff;
+  --input-bg: #000000;
+  --input-border: #ffffff;
+  --input-focus: #1aebff;
+  --track-bg: rgba(255, 255, 255, 0.2);
+  --track-fill: #1aebff;
+  --thumb: #1aebff;
+  --success: #3ff23f;
+  --danger: #ff6b6b;
+  --shadow: rgba(255, 255, 0, 0.15);
+  --glow-shadow: none;
+}
+
+.theme-high-contrast button,
+.theme-high-contrast input[type="range"] {
+  outline: 1px solid var(--border);
+}
+.theme-high-contrast button:focus-visible {
+  outline: 2px solid #ffffff;
+  outline-offset: 2px;
+}
+.theme-high-contrast .toggle-off {
+  background: #000000;
+  outline: 2px solid #ffffff;
+  outline-offset: -1px;
+}
+.theme-high-contrast .toggle-on {
+  background: #1aebff;
+  outline: 2px solid #1aebff;
+  outline-offset: -1px;
+}
+.theme-high-contrast .toggle-on .toggle-thumb  { background: #000000; }
+.theme-high-contrast .toggle-off .toggle-thumb { background: #ffffff; }
+
+/* ── Scrollbar ───────────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 3px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
