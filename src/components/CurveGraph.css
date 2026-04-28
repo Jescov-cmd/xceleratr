@@ -111,3 +111,18 @@
   r: 6;
   filter: drop-shadow(0 0 6px var(--accent));
 }
+
+.cg-line-inactive {
+  fill: none;
+  stroke: var(--text-muted);
+  stroke-width: 1.6;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  opacity: 0.45;
+  stroke-dasharray: 5 4;
+}
+
+.cg-hist {
+  fill: var(--accent);
+  pointer-events: none;
+}

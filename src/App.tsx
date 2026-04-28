@@ -1,10 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Sidebar from './components/Sidebar'
 import TitleBar from './components/TitleBar'
+import UpdateBanner from './components/UpdateBanner'
+import WelcomeWizard from './components/WelcomeWizard'
 import Home from './pages/Home'
 import Settings from './pages/Settings'
-import Startup from './pages/Startup'
+import Preferences from './pages/Preferences'
+import Hotkeys from './pages/Hotkeys'
+import Compare from './pages/Compare'
 import Profiles from './pages/Profiles'
+import Calibration from './pages/Calibration'
+import Changelog from './pages/Changelog'
 import { AppSettings, DEFAULT_CUSTOM_POINTS } from './types'
 import './App.css'
 
@@ -19,14 +25,32 @@ const DEFAULT_SETTINGS: AppSettings = {
   accelerationEnabled: true,
   curveThreshold: 50,
   curveExponent: 1.5,
+  perAxisEnabled: false,
+  curveTypeY: 'default',
+  customCurvePointsY: DEFAULT_CUSTOM_POINTS,
+  curveAccelerationY: 100,
+  curveThresholdY: 50,
+  curveExponentY: 1.5,
   enhancePointerPrecision: false,
   pollingRate: 1000,
+  curveSmoothing: 0,
   theme: 'dark',
   startOnBoot: false,
   profileName: 'Default',
+  userName: '',
+  userEmail: '',
+  userPhone: '',
+  userAvatar: '',
+  hotkeyEnabled: true,
+  hotkeyAccelToggle:  'CommandOrControl+Alt+X',
+  hotkeyCycleProfile: '',
+  hotkeyABCompare:    '',
+  abSlotA: '',
+  abSlotB: '',
+  onboardingComplete: false,
 }
 
-export type Page = 'home' | 'settings' | 'profiles' | 'startup'
+export type Page = 'home' | 'curves' | 'profiles' | 'compare' | 'hotkeys' | 'calibration' | 'preferences' | 'changelog'
 
 export default function App() {
   const [page, setPage]                   = useState<Page>('home')
@@ -41,6 +65,14 @@ export default function App() {
       setSettings({ ...DEFAULT_SETTINGS, ...s })
       setLoaded(true)
     }).catch(() => setLoaded(true))
+  }, [])
+
+  // Push from main: hotkey toggled accel, or another async source mutated settings
+  useEffect(() => {
+    if (!window.api?.onSettingsChanged) return
+    return window.api.onSettingsChanged((next) => {
+      setSettings(prev => ({ ...prev, ...(next as Partial<AppSettings>) }))
+    })
   }, [])
 
   // Fetch Windows accent color and subscribe to changes
@@ -85,14 +117,52 @@ export default function App() {
 
   if (!loaded) return null
 
+  const finishOnboarding = async (patch: Partial<AppSettings>) => {
+    setSettings(prev => ({ ...prev, ...patch }))
+    try {
+      await window.api?.saveSettings?.(patch as Record<string, unknown>)
+      // Apply the curve right away so the user feels their pick immediately
+      const next = { ...settings, ...patch }
+      await window.api?.applyMouse?.({
+        yxRatio: next.yxRatioEnabled ? (next.yxRatio ?? 1) : 1,
+        yxRatioEnabled: next.yxRatioEnabled,
+        curveType: next.curveType,
+        customCurvePoints: next.customCurvePoints ?? DEFAULT_CUSTOM_POINTS,
+        curveAcceleration: next.curveAcceleration,
+        accelerationEnabled: next.accelerationEnabled,
+        curveThreshold: next.curveThreshold,
+        curveExponent: next.curveExponent,
+        perAxisEnabled: next.perAxisEnabled ?? false,
+        curveTypeY: next.curveTypeY ?? 'default',
+        customCurvePointsY: next.customCurvePointsY ?? DEFAULT_CUSTOM_POINTS,
+        curveAccelerationY: next.curveAccelerationY ?? 100,
+        curveThresholdY:    next.curveThresholdY    ?? 50,
+        curveExponentY:     next.curveExponentY     ?? 1.5,
+        curveSmoothing:     next.curveSmoothing     ?? 0,
+        enhancePointerPrecision: next.enhancePointerPrecision,
+        pollingRate: next.pollingRate,
+      })
+    } catch { /* no-op */ }
+  }
+
+  const skipOnboarding = async () => {
+    const patch: Partial<AppSettings> = { onboardingComplete: true }
+    setSettings(prev => ({ ...prev, ...patch }))
+    try { await window.api?.saveSettings?.(patch as Record<string, unknown>) } catch { /* no-op */ }
+  }
+
   return (
     <div className={`app theme-${settings.theme}`} style={accentStyle}>
-      <TitleBar />
+      {!settings.onboardingComplete && (
+        <WelcomeWizard onFinish={finishOnboarding} onSkip={skipOnboarding} />
+      )}
+      <TitleBar settings={settings} updateSettings={updateSettings} />
+      <UpdateBanner />
       <div className="layout">
         <Sidebar page={page} setPage={switchPage} />
         <main className="content" ref={contentRef}>
           {page === 'home'     && <Home     settings={settings} />}
-          {page === 'settings' && <Settings settings={settings} updateSettings={updateSettings} />}
+          {page === 'curves'   && <Settings settings={settings} updateSettings={updateSettings} />}
           {page === 'profiles' && (
             <Profiles
               settings={settings}
@@ -101,7 +171,11 @@ export default function App() {
               setActiveProfileId={setActiveProfileId}
             />
           )}
-          {page === 'startup'  && <Startup  settings={settings} updateSettings={updateSettings} />}
+          {page === 'compare'     && <Compare     settings={settings} updateSettings={updateSettings} />}
+          {page === 'hotkeys'     && <Hotkeys     settings={settings} updateSettings={updateSettings} />}
+          {page === 'calibration' && <Calibration />}
+          {page === 'preferences' && <Preferences settings={settings} updateSettings={updateSettings} />}
+          {page === 'changelog'   && <Changelog />}
         </main>
       </div>
     </div>

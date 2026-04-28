@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { AppSettings, CurvePoint, CurveType, DEFAULT_CUSTOM_POINTS } from '../types'
 import CurveGraph, { getCurveY } from '../components/CurveGraph'
 import CustomCurveEditor from '../components/CustomCurveEditor'
+import Tooltip from '../components/Tooltip'
 import './Page.css'
 import './Settings.css'
 
@@ -10,16 +11,16 @@ interface Props {
   updateSettings: (patch: Partial<AppSettings>) => void
 }
 
-const CURVES: { id: CurveType; label: string }[] = [
-  { id: 'default', label: 'Default' },
-  { id: 'linear',  label: 'Linear'  },
-  { id: 'natural', label: 'Natural' },
-  { id: 'power',   label: 'Power'   },
-  { id: 'sigmoid', label: 'Sigmoid' },
-  { id: 'bounce',  label: 'Bounce'  },
-  { id: 'classic', label: 'Classic' },
-  { id: 'jump',    label: 'Jump'    },
-  { id: 'custom',  label: 'Custom'  },
+const CURVES: { id: CurveType; label: string; sub: string }[] = [
+  { id: 'default', label: 'Default', sub: 'Off — flat'    },
+  { id: 'linear',  label: 'Linear',  sub: 'Steady'        },
+  { id: 'natural', label: 'Natural', sub: 'Smooth ramp'   },
+  { id: 'power',   label: 'Power',   sub: 'Snappy fast'   },
+  { id: 'sigmoid', label: 'Sigmoid', sub: 'S-curve'       },
+  { id: 'bounce',  label: 'Bounce',  sub: 'Playful'       },
+  { id: 'classic', label: 'Classic', sub: 'Stepped'       },
+  { id: 'jump',    label: 'Jump',    sub: 'Hard step'     },
+  { id: 'custom',  label: 'Custom',  sub: 'Draw your own' },
 ]
 
 const POLLING_RATES = [125, 250, 500, 1000, 2000, 4000, 8000]
@@ -34,6 +35,7 @@ export default function Settings({ settings, updateSettings }: Props) {
   const [saving, setSaving]       = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const [isDirty, setIsDirty]     = useState(false)
   const [liveX, setLiveX]         = useState(0)
+  const [editingAxis, setEditingAxis] = useState<'x' | 'y'>('x')
   const localRef    = useRef(local)
   const statusTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const targetXRef  = useRef(0)
@@ -85,13 +87,39 @@ export default function Settings({ settings, updateSettings }: Props) {
     setIsDirty(true)
   }
 
+  // When per-axis is on, axis-scoped fields route through the editing axis.
+  // When off, they always write to the X (single-curve) fields — legacy behavior.
+  const isYAxis = local.perAxisEnabled && editingAxis === 'y'
+
+  // Active-axis read helpers
+  const activeCurveType         = isYAxis ? local.curveTypeY         : local.curveType
+  const activeCustomPoints      = isYAxis ? local.customCurvePointsY : local.customCurvePoints
+  const activeAcceleration      = isYAxis ? local.curveAccelerationY : local.curveAcceleration
+  const activeThreshold         = isYAxis ? local.curveThresholdY    : local.curveThreshold
+  const activeExponent          = isYAxis ? local.curveExponentY     : local.curveExponent
+
+  // Active-axis write helpers
+  const patchActiveCurveType = (v: CurveType) =>
+    patch(isYAxis ? { curveTypeY: v } : { curveType: v })
+  const patchActiveCustomPoints = (v: CurvePoint[]) =>
+    patch(isYAxis ? { customCurvePointsY: v } : { customCurvePoints: v })
+  const patchActiveAcceleration = (v: number) =>
+    patch(isYAxis ? { curveAccelerationY: v } : { curveAcceleration: v })
+  const patchActiveThreshold = (v: number) =>
+    patch(isYAxis ? { curveThresholdY: v } : { curveThreshold: v })
+  const patchActiveExponent = (v: number) =>
+    patch(isYAxis ? { curveExponentY: v } : { curveExponent: v })
+
   const handleSave = async () => {
     const s = localRef.current
     setSaving('saving')
     try {
-      await window.api.saveSettings(s as unknown as Record<string, unknown>)
-      await window.api.applyMouse({
-        yxRatio:                 s.yxRatioEnabled ? (s.yxRatio ?? 1) : 1,
+      // Save only the curve-related fields this page is responsible for.
+      // Other pages (Preferences, Hotkeys, Profile menu) save their own
+      // concerns — sending the full local state would clobber any changes
+      // the user made elsewhere since this page was opened (e.g. theme).
+      const curvePatch = {
+        yxRatio:                 s.yxRatio,
         yxRatioEnabled:          s.yxRatioEnabled,
         curveType:               s.curveType,
         customCurvePoints:       s.customCurvePoints ?? DEFAULT_CUSTOM_POINTS,
@@ -99,10 +127,22 @@ export default function Settings({ settings, updateSettings }: Props) {
         accelerationEnabled:     s.accelerationEnabled,
         curveThreshold:          s.curveThreshold,
         curveExponent:           s.curveExponent,
+        perAxisEnabled:          s.perAxisEnabled ?? false,
+        curveTypeY:              s.curveTypeY ?? 'default',
+        customCurvePointsY:      s.customCurvePointsY ?? DEFAULT_CUSTOM_POINTS,
+        curveAccelerationY:      s.curveAccelerationY ?? 100,
+        curveThresholdY:         s.curveThresholdY    ?? 50,
+        curveExponentY:          s.curveExponentY     ?? 1.5,
+        curveSmoothing:          s.curveSmoothing     ?? 0,
         enhancePointerPrecision: s.enhancePointerPrecision,
         pollingRate:             s.pollingRate,
+      }
+      await window.api.saveSettings(curvePatch as Record<string, unknown>)
+      await window.api.applyMouse({
+        ...curvePatch,
+        yxRatio: s.yxRatioEnabled ? (s.yxRatio ?? 1) : 1,
       })
-      updateSettings(s)
+      updateSettings(curvePatch)
       setIsDirty(false)
       setSaving('saved')
       if (statusTimer.current) clearTimeout(statusTimer.current)
@@ -116,44 +156,104 @@ export default function Settings({ settings, updateSettings }: Props) {
 
   const graphSettings = {
     ...local,
-    yxRatio: local.yxRatioEnabled ? (local.yxRatio ?? 1) : 1,
+    // When showing the active axis on the graph, the graph reads `curveType` etc.
+    // Substitute Y fields when editing Y so the live preview reflects the user's edits.
+    curveType:         activeCurveType,
+    customCurvePoints: activeCustomPoints,
+    curveAcceleration: activeAcceleration,
+    curveThreshold:    activeThreshold,
+    curveExponent:     activeExponent,
+    yxRatio:           local.yxRatioEnabled ? (local.yxRatio ?? 1) : 1,
   }
+
+  // Inactive-axis curve, only used when perAxisEnabled — drawn in gray on the graph
+  const inactiveCurve = local.perAxisEnabled ? {
+    curveType:         isYAxis ? local.curveType         : local.curveTypeY,
+    customCurvePoints: isYAxis ? local.customCurvePoints : local.customCurvePointsY,
+    curveAcceleration: isYAxis ? local.curveAcceleration : local.curveAccelerationY,
+    curveThreshold:    isYAxis ? local.curveThreshold    : local.curveThresholdY,
+    curveExponent:     isYAxis ? local.curveExponent     : local.curveExponentY,
+  } : null
 
   return (
     <div className="page">
       <div className="page-header">
-        <h1 className="page-title">Settings</h1>
-        <p className="page-sub">Adjust curve and sensitivity — graph updates live</p>
+        <h1 className="page-title">Curves</h1>
+        <p className="page-sub">Shape how your mouse accelerates — graph updates live</p>
       </div>
 
-      {/* Curve type */}
+      {/* Per-axis curves master toggle + X/Y switcher */}
       <section className="section">
-        <div className="section-title">Curve Type</div>
+        <div className="field">
+          <div className="field-header">
+            <label className="field-label">Per-axis curves</label>
+            <Toggle
+              checked={local.perAxisEnabled}
+              onChange={v => patch({ perAxisEnabled: v })}
+            />
+          </div>
+          <div className="field-hint">
+            Shape horizontal and vertical movement with separate curves. When off,
+            both axes share one curve and the V/H Ratio scales the vertical output.
+          </div>
+        </div>
+
+        {local.perAxisEnabled && (
+          <div className="axis-tabs">
+            <button
+              className={`axis-tab ${editingAxis === 'x' ? 'axis-tab-active' : ''}`}
+              onClick={() => setEditingAxis('x')}
+            >
+              X axis (horizontal)
+            </button>
+            <button
+              className={`axis-tab ${editingAxis === 'y' ? 'axis-tab-active' : ''}`}
+              onClick={() => setEditingAxis('y')}
+            >
+              Y axis (vertical)
+            </button>
+          </div>
+        )}
+      </section>
+
+      {/* Curve type — applies to active axis when per-axis is on */}
+      <section className="section">
+        <div className="section-title">
+          Curve Type
+          {local.perAxisEnabled && <span className="axis-tag"> · {editingAxis.toUpperCase()} axis</span>}
+        </div>
         <div className="curve-picker">
           {CURVES.map(c => (
             <button
               key={c.id}
-              className={`curve-btn ${local.curveType === c.id ? 'curve-btn-active' : ''} ${c.id === 'custom' ? 'curve-btn-custom' : ''}`}
-              onClick={() => patch({ curveType: c.id })}
+              className={`curve-btn ${activeCurveType === c.id ? 'curve-btn-active' : ''} ${c.id === 'custom' ? 'curve-btn-custom' : ''}`}
+              onClick={() => patchActiveCurveType(c.id)}
             >
-              <CurveIcon type={c.id} customPts={local.customCurvePoints ?? DEFAULT_CUSTOM_POINTS} />
-              {c.label}
+              <CurveIcon type={c.id} customPts={activeCustomPoints ?? DEFAULT_CUSTOM_POINTS} />
+              <span className="curve-btn-label">{c.label}</span>
+              <span className="curve-btn-sub">{c.sub}</span>
             </button>
           ))}
         </div>
       </section>
 
-      {/* Custom curve editor — shown only when Custom is selected */}
-      {local.curveType === 'custom' && (
+      {/* Custom curve editor — shown only when Custom is selected on the active axis */}
+      {activeCurveType === 'custom' && (
         <CustomCurveEditor
-          points={local.customCurvePoints ?? DEFAULT_CUSTOM_POINTS}
-          onChange={(pts: CurvePoint[]) => patch({ customCurvePoints: pts })}
+          points={activeCustomPoints ?? DEFAULT_CUSTOM_POINTS}
+          onChange={(pts: CurvePoint[]) => patchActiveCustomPoints(pts)}
         />
       )}
 
       {/* Live graph preview — hidden for custom (editor IS the graph) */}
-      {local.curveType !== 'custom' && (
-        <CurveGraph settings={graphSettings} height={200} liveX={liveX} />
+      {activeCurveType !== 'custom' && (
+        <CurveGraph
+          settings={graphSettings}
+          height={200}
+          liveX={liveX}
+          inactiveCurve={inactiveCurve}
+          activeAxis={local.perAxisEnabled ? editingAxis : undefined}
+        />
       )}
 
       <p className="epp-warning">
@@ -162,19 +262,25 @@ export default function Settings({ settings, updateSettings }: Props) {
 
       {/* Parameters */}
       <section className="section">
-        <div className="section-title">Parameters</div>
+        <div className="section-title">
+          Parameters
+          {local.perAxisEnabled && <span className="axis-tag"> · {editingAxis.toUpperCase()} axis</span>}
+        </div>
 
-        <SliderField
-          label="Vertical / Horizontal Ratio"
-          hint="Scales vertical movement relative to horizontal. 1.00 = equal axes. 0.75 = vertical 25% slower. Toggle off to disable."
-          min={0.5} max={2.0} step={0.05}
-          value={local.yxRatio ?? 1}
-          enabled={local.yxRatioEnabled ?? true}
-          onToggle={v => patch({ yxRatioEnabled: v })}
-          onChange={v => patch({ yxRatio: v })}
-        />
+        {/* V/H Ratio is hidden when per-axis is on — independent curves replace it */}
+        {!local.perAxisEnabled && (
+          <SliderField
+            label="Vertical / Horizontal Ratio"
+            hint="Scales vertical movement relative to horizontal. 1.00 = equal axes. 0.75 = vertical 25% slower. Toggle off to disable."
+            min={0.5} max={2.0} step={0.05}
+            value={local.yxRatio ?? 1}
+            enabled={local.yxRatioEnabled ?? true}
+            onToggle={v => patch({ yxRatioEnabled: v })}
+            onChange={v => patch({ yxRatio: v })}
+          />
+        )}
 
-        {needsAccelToggle(local.curveType) && !showStrength(local.curveType) && local.curveType !== 'custom' && (
+        {needsAccelToggle(activeCurveType) && !showStrength(activeCurveType) && activeCurveType !== 'custom' && (
           <div className="field">
             <div className="field-header">
               <label className="field-label">Acceleration</label>
@@ -183,11 +289,11 @@ export default function Settings({ settings, updateSettings }: Props) {
                 onChange={v => patch({ accelerationEnabled: v })}
               />
             </div>
-            <div className="field-hint">Toggle off to disable the curve and use flat pointer movement.</div>
+            <div className="field-hint">Master switch — turns the curve(s) off entirely and uses flat pointer movement.</div>
           </div>
         )}
 
-        {local.curveType === 'custom' && (
+        {activeCurveType === 'custom' && (
           <div className="field">
             <div className="field-header">
               <label className="field-label">Custom Curve</label>
@@ -200,49 +306,68 @@ export default function Settings({ settings, updateSettings }: Props) {
           </div>
         )}
 
-        {showStrength(local.curveType) && (
+        {showStrength(activeCurveType) && (
           <SliderField
             label="Acceleration Strength"
             hint="How much the multiplier rises at high speed. 100% = standard, 200% = extreme. Toggle off to disable the curve entirely."
             min={0} max={200} step={1}
-            value={local.curveAcceleration}
+            value={activeAcceleration}
             enabled={local.accelerationEnabled}
             onToggle={v => patch({ accelerationEnabled: v })}
-            onChange={v => patch({ curveAcceleration: v })}
+            onChange={v => patchActiveAcceleration(v)}
             suffix="%"
           />
         )}
 
-        {showThresh(local.curveType) && (
+        {showThresh(activeCurveType) && (
           <SliderField
-            label={local.curveType === 'jump' ? 'Jump Threshold' : 'Speed Threshold'}
+            label={activeCurveType === 'jump' ? 'Jump Threshold' : 'Speed Threshold'}
+            tooltip={
+              activeCurveType === 'jump'
+                ? 'How fast you have to move before the multiplier jumps to its high value. Below this speed, no acceleration. Above it, full acceleration.'
+                : 'How quickly acceleration ramps up. Lower values mean even slow movements get accelerated; higher values mean only fast flicks get the boost.'
+            }
             hint={
-              local.curveType === 'jump'
+              activeCurveType === 'jump'
                 ? 'Input speed at which sensitivity jumps. Shown as dashed line on graph.'
                 : 'Speed at which acceleration kicks in. Shown as dashed line on graph.'
             }
             min={5} max={95} step={1}
-            value={local.curveThreshold}
-            onChange={v => patch({ curveThreshold: v })}
+            value={activeThreshold}
+            onChange={v => patchActiveThreshold(v)}
             suffix="%"
           />
         )}
 
-        {showExp(local.curveType) && (
+        {showExp(activeCurveType) && (
           <SliderField
             label="Curve Exponent"
+            tooltip="Mathematical steepness of the curve. 1.0 = straight diagonal, 2.0 = quadratic (slow start, very fast end), 0.5 = the opposite (fast start, slow end at high speeds)."
             hint="Steepness of the power curve. Higher = more dramatic boost at fast movement."
             min={0.3} max={3.0} step={0.1}
-            value={local.curveExponent}
+            value={activeExponent}
             enabled={local.accelerationEnabled}
             onToggle={v => patch({ accelerationEnabled: v })}
-            onChange={v => patch({ curveExponent: v })}
+            onChange={v => patchActiveExponent(v)}
           />
         )}
 
+        <SliderField
+          label="Curve Smoothing"
+          tooltip="Softens transitions in the multiplier so step-like curves (Classic, Jump) don't feel abrupt. 0 = no smoothing (instant). Higher values average across recent movement, trading response speed for smoother feel."
+          hint="Smooths the curve's effect over time. 0 = off. Useful for Classic / Jump curves to make the steps feel less sudden."
+          min={0} max={100} step={1}
+          value={local.curveSmoothing ?? 0}
+          onChange={v => patch({ curveSmoothing: v })}
+          suffix="%"
+        />
+
         <div className="field">
           <div className="field-header">
-            <label className="field-label">Enhance Pointer Precision (EPP)</label>
+            <label className="field-label">
+              Enhance Pointer Precision (EPP)
+              <Tooltip text="Windows' built-in mouse acceleration. It's the system-level acceleration most pros disable. Xceleratr's curves replace it — keep this off unless you specifically want Windows acceleration on top." />
+            </label>
             <Toggle
               checked={local.enhancePointerPrecision}
               onChange={v => patch({ enhancePointerPrecision: v })}
@@ -279,28 +404,6 @@ export default function Settings({ settings, updateSettings }: Props) {
         </div>
       </section>
 
-      {/* Appearance */}
-      <section className="section">
-        <div className="section-title">Appearance</div>
-        <div className="field">
-          <div className="field-header">
-            <label className="field-label">Theme</label>
-          </div>
-          <div className="theme-picker">
-            {(['light', 'dark', 'high-contrast'] as const).map(t => (
-              <button
-                key={t}
-                className={`theme-btn ${local.theme === t ? 'theme-btn-active' : ''}`}
-                onClick={() => patch({ theme: t })}
-              >
-                <div className={`theme-swatch swatch-${t === 'high-contrast' ? 'hc' : t}`} />
-                <span>{t === 'high-contrast' ? 'High Contrast' : t.charAt(0).toUpperCase() + t.slice(1)}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      </section>
-
       {/* Save row */}
       <div className="save-row">
         <button
@@ -330,16 +433,20 @@ interface SliderFieldProps {
   min: number; max: number; step: number; value: number
   onChange: (v: number) => void
   suffix?: string; enabled?: boolean; onToggle?: (v: boolean) => void
+  tooltip?: string
 }
 
-function SliderField({ label, hint, min, max, step, value, onChange, suffix = '', enabled = true, onToggle }: SliderFieldProps) {
+function SliderField({ label, hint, min, max, step, value, onChange, suffix = '', enabled = true, onToggle, tooltip }: SliderFieldProps) {
   const pct     = ((value - min) / (max - min)) * 100
   const display = step < 1 ? value.toFixed(2) : String(value)
 
   return (
     <div className={`field ${!enabled ? 'field-disabled' : ''}`}>
       <div className="field-header">
-        <label className="field-label">{label}</label>
+        <label className="field-label">
+          {label}
+          {tooltip && <Tooltip text={tooltip} />}
+        </label>
         <div className="field-header-right">
           {onToggle && <Toggle checked={enabled} onChange={onToggle} />}
           <div className="field-value-badge" style={{ opacity: enabled ? 1 : 0.35 }}>{display}{suffix}</div>

@@ -1,11 +1,23 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { AppSettings, CurvePoint, CurveType } from '../types'
 import './CurveGraph.css'
+
+interface InactiveCurve {
+  curveType:         CurveType
+  customCurvePoints: CurvePoint[]
+  curveAcceleration: number
+  curveThreshold:    number
+  curveExponent:     number
+}
 
 interface Props {
   settings: Pick<AppSettings, 'yxRatio' | 'curveType' | 'customCurvePoints' | 'curveAcceleration' | 'curveThreshold' | 'curveExponent'>
   height?: number
   liveX?: number
+  // Per-axis: when set, draws the *other* axis's curve in gray as a backdrop.
+  inactiveCurve?: InactiveCurve | null
+  // Which axis is currently being edited ('x' / 'y'). When set, V/H ratio overlay is suppressed.
+  activeAxis?: 'x' | 'y'
 }
 
 // ── Monotone cubic spline (Fritsch-Carlson) ───────────────────────────────────
@@ -101,10 +113,30 @@ export const CURVE_LABELS: Record<CurveType, string> = {
   custom:   'Custom — user-defined curve',
 }
 
-export default function CurveGraph({ settings, height = 200, liveX }: Props) {
+const HIST_BUCKETS = 32
+
+export default function CurveGraph({ settings, height = 200, liveX, inactiveCurve, activeAxis }: Props) {
   const { curveType, customCurvePoints, curveAcceleration, curveThreshold, curveExponent, yxRatio } = settings
   const ratio = yxRatio ?? 1
-  const showRatio = Math.abs(ratio - 1) > 0.02
+
+  // Speed histogram — counts how often live input speeds land in each bucket,
+  // with gentle decay so old activity fades. Drawn as a faint backdrop showing
+  // where on the curve the user actually spends their time.
+  const [hist, setHist] = useState<number[]>(() => new Array(HIST_BUCKETS).fill(0))
+  useEffect(() => {
+    if (liveX === undefined) return
+    setHist(prev => {
+      const next = prev.map(v => v * 0.997)  // slow decay (~5min half-life at 60fps)
+      if (liveX > 0.01) {
+        const idx = Math.min(HIST_BUCKETS - 1, Math.floor(liveX * HIST_BUCKETS))
+        next[idx] += 1
+      }
+      return next
+    })
+  }, [liveX])
+  const histMax = useMemo(() => Math.max(0.01, ...hist), [hist])
+  // V/H ratio overlay is hidden when in per-axis mode (it's superseded by the inactive curve)
+  const showRatio = !activeAxis && Math.abs(ratio - 1) > 0.02
 
   const W = 420
   const H = height
@@ -123,9 +155,28 @@ export default function CurveGraph({ settings, height = 200, liveX }: Props) {
     showRatio ? points.map(p => ({ x: p.x, y: p.y * ratio })) : null
   ), [points, ratio, showRatio])
 
+  // Inactive-axis points (per-axis mode only) — drawn in gray underneath the active line
+  const inactivePoints = useMemo(() => {
+    if (!inactiveCurve) return null
+    return Array.from({ length: 150 }, (_, i) => {
+      const x = i / 149
+      return {
+        x,
+        y: getCurveY(
+          inactiveCurve.curveType, x,
+          inactiveCurve.curveAcceleration,
+          inactiveCurve.curveThreshold,
+          inactiveCurve.curveExponent,
+          inactiveCurve.customCurvePoints,
+        ),
+      }
+    })
+  }, [inactiveCurve])
+
   const maxY = Math.max(
     ...points.map(p => p.y),
     ...(vPoints?.map(p => p.y) ?? []),
+    ...(inactivePoints?.map(p => p.y) ?? []),
     1.1,
   ) * 1.08
 
@@ -138,6 +189,10 @@ export default function CurveGraph({ settings, height = 200, liveX }: Props) {
   const fillD = `${pathD} L${sx(1).toFixed(1)},${sy(0).toFixed(1)} L${sx(0).toFixed(1)},${sy(0).toFixed(1)} Z`
 
   const vPathD = vPoints ? vPoints.map((p, i) =>
+    `${i === 0 ? 'M' : 'L'}${sx(p.x).toFixed(1)},${sy(p.y).toFixed(1)}`
+  ).join(' ') : null
+
+  const inactivePathD = inactivePoints ? inactivePoints.map((p, i) =>
     `${i === 0 ? 'M' : 'L'}${sx(p.x).toFixed(1)},${sy(p.y).toFixed(1)}`
   ).join(' ') : null
 
@@ -155,6 +210,23 @@ export default function CurveGraph({ settings, height = 200, liveX }: Props) {
         <span className="cg-title">{CURVE_LABELS[curveType]}</span>
       </div>
       <svg viewBox={`0 0 ${W} ${H}`} className="cg-svg">
+        {/* Speed histogram backdrop — shows where the user has been moving recently */}
+        {hist.map((count, i) => {
+          const intensity = Math.min(1, count / histMax)
+          if (intensity < 0.04) return null
+          const xL = sx(i / HIST_BUCKETS)
+          const xR = sx((i + 1) / HIST_BUCKETS)
+          return (
+            <rect
+              key={`h${i}`}
+              x={xL} y={PAD.top}
+              width={Math.max(0.5, xR - xL)} height={gh}
+              className="cg-hist"
+              opacity={0.05 + intensity * 0.20}
+            />
+          )
+        })}
+
         {/* Grid verticals */}
         {gridXVals.map(v => (
           <line key={`gx${v}`} x1={sx(v)} y1={PAD.top} x2={sx(v)} y2={PAD.top + gh} className="cg-grid" />
@@ -172,6 +244,11 @@ export default function CurveGraph({ settings, height = 200, liveX }: Props) {
         {showThresh && (
           <line x1={sx(curveThreshold / 100)} y1={PAD.top} x2={sx(curveThreshold / 100)} y2={PAD.top + gh}
             className="cg-threshold" strokeDasharray="4 3" />
+        )}
+
+        {/* Inactive axis (per-axis mode) — drawn first so the active line sits on top */}
+        {inactivePathD && (
+          <path d={inactivePathD} className="cg-line-inactive" />
         )}
 
         {/* Vertical (V) fill + line — drawn under H so H is on top */}
@@ -205,13 +282,27 @@ export default function CurveGraph({ settings, height = 200, liveX }: Props) {
         <text x={11} y={PAD.top + gh / 2} className="cg-axis-title" textAnchor="middle"
           transform={`rotate(-90, 11, ${PAD.top + gh / 2})`}>Output</text>
 
-        {/* V/H ratio legend */}
+        {/* V/H ratio legend (single-curve mode) */}
         {showRatio && (
           <g>
             <line x1={lgX - 62} y1={PAD.top + 7} x2={lgX - 50} y2={PAD.top + 7} className="cg-line" />
             <text x={lgX - 47} y={PAD.top + 11} className="cg-legend">H</text>
             <line x1={lgX - 28} y1={PAD.top + 7} x2={lgX - 16} y2={PAD.top + 7} className="cg-line-v" strokeDasharray="4 2" />
             <text x={lgX - 13} y={PAD.top + 11} className="cg-legend">V {ratio.toFixed(2)}×</text>
+          </g>
+        )}
+
+        {/* Per-axis legend — active in accent, inactive in gray */}
+        {activeAxis && (
+          <g>
+            <line x1={lgX - 78} y1={PAD.top + 7} x2={lgX - 64} y2={PAD.top + 7} className="cg-line" />
+            <text x={lgX - 60} y={PAD.top + 11} className="cg-legend">{activeAxis.toUpperCase()} (editing)</text>
+            {inactivePathD && (
+              <>
+                <line x1={lgX - 22} y1={PAD.top + 7} x2={lgX - 8} y2={PAD.top + 7} className="cg-line-inactive" />
+                <text x={lgX - 4} y={PAD.top + 11} className="cg-legend" textAnchor="end">{activeAxis === 'x' ? 'Y' : 'X'}</text>
+              </>
+            )}
           </g>
         )}
 

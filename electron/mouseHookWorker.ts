@@ -30,13 +30,29 @@ interface CurveSettings {
   curveExponent: number
   pollingRate: number
   yxRatio: number
+  // Per-axis: when true, Y axis uses its own independent curve and yxRatio is ignored
+  perAxisEnabled: boolean
+  curveTypeY: CurveType
+  customCurvePointsY: CurvePoint[]
+  curveAccelerationY: number
+  curveThresholdY: number
+  curveExponentY: number
+  curveSmoothing: number
 }
 
 let curve: CurveSettings = {
   curveType: 'default', customCurvePoints: [],
   curveAcceleration: 100, accelerationEnabled: true,
   curveThreshold: 50, curveExponent: 1.5, pollingRate: 1000, yxRatio: 1.0,
+  perAxisEnabled: false,
+  curveTypeY: 'default', customCurvePointsY: [],
+  curveAccelerationY: 100, curveThresholdY: 50, curveExponentY: 1.5,
+  curveSmoothing: 0,
 }
+
+// EMA state for smoothing — persists across hook callbacks
+let smoothMultX = 1
+let smoothMultY = 1
 
 // ── Monotone cubic spline (Fritsch-Carlson) ───────────────────────────────────
 
@@ -64,20 +80,28 @@ function monoSpline(pts: CurvePoint[], x: number): number {
 
 // ── Curve math ────────────────────────────────────────────────────────────────
 
-function curveMultiplier(speed: number): number {
-  if (!curve.accelerationEnabled || curve.curveType === 'default') return 1
+interface AxisParams {
+  type:         CurveType
+  customPoints: CurvePoint[]
+  acceleration: number
+  threshold:    number
+  exponent:     number
+}
+
+function multiplierFor(speed: number, p: AxisParams): number {
+  if (!curve.accelerationEnabled || p.type === 'default') return 1
   const maxSpeed = 60 * (1000 / curve.pollingRate)
   const x = Math.min(1, speed / maxSpeed)
-  const a = curve.curveAcceleration / 100
-  const t = Math.max(0.05, curve.curveThreshold / 100)
-  switch (curve.curveType) {
+  const a = p.acceleration / 100
+  const t = Math.max(0.05, p.threshold / 100)
+  switch (p.type) {
     case 'custom': {
-      const pts = curve.customCurvePoints
+      const pts = p.customPoints
       return pts && pts.length >= 2 ? monoSpline(pts, x) : 1
     }
     case 'linear':   return 1 + a * x
     case 'natural':  return 1 + a * (1 - Math.exp(-(5 / t) * x))
-    case 'power':    return 1 + a * Math.pow(x, Math.max(0.3, curve.curveExponent))
+    case 'power':    return 1 + a * Math.pow(x, Math.max(0.3, p.exponent))
     case 'sigmoid': {
       const k = 10 + a * 10
       const s = (v: number) => 1 / (1 + Math.exp(-k * (v - t)))
@@ -87,6 +111,20 @@ function curveMultiplier(speed: number): number {
     case 'classic':  return x < t * 0.5 ? 1 : x < t ? 1 + a * 0.5 : 1 + a
     case 'jump':     return x < t ? 1 : 1 + a
     default:         return 1
+  }
+}
+
+function paramsX(): AxisParams {
+  return {
+    type: curve.curveType, customPoints: curve.customCurvePoints,
+    acceleration: curve.curveAcceleration, threshold: curve.curveThreshold, exponent: curve.curveExponent,
+  }
+}
+
+function paramsY(): AxisParams {
+  return {
+    type: curve.curveTypeY, customPoints: curve.customCurvePointsY,
+    acceleration: curve.curveAccelerationY, threshold: curve.curveThresholdY, exponent: curve.curveExponentY,
   }
 }
 
@@ -182,11 +220,34 @@ const hookCb = koffi.register((nCode: number, wParam: number | bigint, lParam: n
 
     const dx = rawDx, dy = rawDy
     const speed = Math.sqrt(dx * dx + dy * dy)
-    const maxSpeed = 60 * (1000 / curve.pollingRate)  // used by curveMultiplier (keep unchanged)
     const displayMax = 5 * (1000 / curve.pollingRate)  // display-only: 5000 px/s = normalizedX 1.0
     const normalizedX = Math.min(1, speed / displayMax)
-    const mult  = curveMultiplier(speed)
-    const ratio = curve.yxRatio
+
+    // Per-axis: each axis uses its own |delta| as input speed and its own curve.
+    // Single-curve mode: total speed drives one shared multiplier, then yxRatio
+    // scales Y independently (legacy behavior, preserved for non-power-users).
+    let multX: number, multY: number
+    if (curve.perAxisEnabled) {
+      multX = multiplierFor(Math.abs(dx), paramsX())
+      multY = multiplierFor(Math.abs(dy), paramsY())
+    } else {
+      const m = multiplierFor(speed, paramsX())
+      multX = m
+      multY = m * curve.yxRatio
+    }
+
+    // Curve smoothing — exponential moving average. 0 = off, 100 = very smooth.
+    // alpha 1.0 means no smoothing; alpha 0.05 means very heavy averaging.
+    if (curve.curveSmoothing > 0) {
+      const alpha = 1 - (curve.curveSmoothing / 100) * 0.95
+      smoothMultX = smoothMultX * (1 - alpha) + multX * alpha
+      smoothMultY = smoothMultY * (1 - alpha) + multY * alpha
+      multX = smoothMultX
+      multY = smoothMultY
+    } else {
+      smoothMultX = multX
+      smoothMultY = multY
+    }
 
     // Throttled live speed broadcast (~60fps) — sent before early-return so slow speeds register too
     const now = Date.now()
@@ -195,13 +256,13 @@ const hookCb = koffi.register((nCode: number, wParam: number | bigint, lParam: n
       parentPort?.postMessage({ type: 'speed', x: normalizedX })
     }
 
-    if (speed < 0.5 || (Math.abs(mult - 1) < 0.02 && Math.abs(ratio - 1) < 0.02)) {
+    if (speed < 0.5 || (Math.abs(multX - 1) < 0.02 && Math.abs(multY - 1) < 0.02)) {
       prevX = x; prevY = y
       return CallNextHook(null, nCode, wParam, lParam)
     }
 
-    const newDx = Math.round(dx * mult)
-    const newDy = Math.round(dy * mult * ratio)
+    const newDx = Math.round(dx * multX)
+    const newDy = Math.round(dy * multY)
 
     // Update cursor tracking, clamped to screen bounds so edge events don't desync prevX/prevY
     prevX = Math.max(screenVx, Math.min(screenVx + screenVw - 1, prevX + newDx))

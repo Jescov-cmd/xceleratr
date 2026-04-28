@@ -29,4 +29,27 @@ contextBridge.exposeInMainWorld('api', {
     ipcRenderer.on('accent-color-changed', handler as any)
     return () => ipcRenderer.removeListener('accent-color-changed', handler as any)
   },
+
+  openSupportEmail: () => ipcRenderer.invoke('support-email-open'),
+
+  setHotkeyEnabled: (enabled: boolean) => ipcRenderer.invoke('hotkey-set-enabled', enabled),
+  getHotkeyStatus:  () => ipcRenderer.invoke('hotkey-get-status'),
+  hotkeyBind:       (action: string, accelerator: string) =>
+                      ipcRenderer.invoke('hotkey-bind', action, accelerator),
+
+  refreshTray: () => ipcRenderer.invoke('tray-refresh'),
+
+  onSettingsChanged: (cb: (settings: Record<string, unknown>) => void): (() => void) => {
+    const handler = (_e: unknown, s: Record<string, unknown>) => cb(s)
+    ipcRenderer.on('settings-changed', handler as any)
+    return () => ipcRenderer.removeListener('settings-changed', handler as any)
+  },
+
+  getUpdateStatus: () => ipcRenderer.invoke('update-get-status'),
+  installUpdateNow: () => ipcRenderer.invoke('update-install-now'),
+  onUpdateStatus: (cb: (status: Record<string, unknown>) => void): (() => void) => {
+    const handler = (_e: unknown, s: Record<string, unknown>) => cb(s)
+    ipcRenderer.on('update-status', handler as any)
+    return () => ipcRenderer.removeListener('update-status', handler as any)
+  },
 })

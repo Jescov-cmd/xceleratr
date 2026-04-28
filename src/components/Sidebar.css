@@ -17,11 +17,24 @@
   border-bottom: 1px solid var(--border);
 }
 
-.sidebar-brand-img {
-  width: 36px;
-  height: 36px;
-  image-rendering: pixelated;
-  opacity: 0.85;
+/* Brand icon — theme-aware. Defaults to --text (works for any theme), with
+   explicit overrides for the three known themes so it's exactly the colors
+   asked for: white on dark, black on light, max-contrast on high-contrast. */
+.sidebar-brand-icon {
+  color: var(--text);
+}
+
+.theme-dark .sidebar-brand-icon {
+  color: #ffffff;
+  filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.18));
+}
+
+.theme-light .sidebar-brand-icon {
+  color: #000000;
+}
+
+.theme-high-contrast .sidebar-brand-icon {
+  color: var(--text);
 }
 
 .nav-items {
@@ -79,10 +92,46 @@
   height: 16px;
 }
 
+.sidebar-bottom {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.sidebar-support {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: 4px;
+  font-size: 12px;
+  font-family: inherit;
+  text-align: left;
+  transition: background 0.1s, color 0.1s;
+}
+
+.sidebar-support:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.sidebar-support svg {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  opacity: 0.85;
+}
+
 .sidebar-version {
   font-size: 10px;
   color: var(--text-muted);
-  padding-left: 12px;
+  padding-left: 10px;
   opacity: 0.35;
   letter-spacing: 0.03em;
 }

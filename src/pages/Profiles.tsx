@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { AppSettings, DEFAULT_CUSTOM_POINTS, MouseProfile, MouseSettings } from '../types'
+import { GAME_PRESETS } from '../data/gamePresets'
 import './Page.css'
 import './Profiles.css'
 
@@ -9,6 +10,7 @@ interface Props {
   activeProfileId: string | null
   setActiveProfileId: (id: string) => void
 }
+
 
 const SLOT_NAMES: Record<string, string> = {
   'default': 'Default',
@@ -23,6 +25,13 @@ function toMouseSettings(s: AppSettings): MouseSettings {
     customCurvePoints: s.customCurvePoints ?? DEFAULT_CUSTOM_POINTS,
     curveAcceleration: s.curveAcceleration, accelerationEnabled: s.accelerationEnabled,
     curveThreshold: s.curveThreshold, curveExponent: s.curveExponent,
+    perAxisEnabled: s.perAxisEnabled ?? false,
+    curveTypeY: s.curveTypeY ?? 'default',
+    customCurvePointsY: s.customCurvePointsY ?? DEFAULT_CUSTOM_POINTS,
+    curveAccelerationY: s.curveAccelerationY ?? 100,
+    curveThresholdY:    s.curveThresholdY    ?? 50,
+    curveExponentY:     s.curveExponentY     ?? 1.5,
+    curveSmoothing:     s.curveSmoothing     ?? 0,
     enhancePointerPrecision: s.enhancePointerPrecision, pollingRate: s.pollingRate,
   }
 }
@@ -44,6 +53,14 @@ function decodeProfile(code: string): { name: string; settings: MouseSettings } 
         customCurvePoints: Array.isArray(p.customCurvePoints) ? p.customCurvePoints : DEFAULT_CUSTOM_POINTS,
         curveAcceleration: p.curveAcceleration ?? 100, accelerationEnabled: p.accelerationEnabled ?? true,
         curveThreshold: p.curveThreshold ?? 50, curveExponent: p.curveExponent ?? 1.5,
+        // Per-axis fields default to off / safe values when missing (older XC1: codes)
+        perAxisEnabled: p.perAxisEnabled ?? false,
+        curveTypeY: p.curveTypeY ?? 'default',
+        customCurvePointsY: Array.isArray(p.customCurvePointsY) ? p.customCurvePointsY : DEFAULT_CUSTOM_POINTS,
+        curveAccelerationY: p.curveAccelerationY ?? 100,
+        curveThresholdY:    p.curveThresholdY    ?? 50,
+        curveExponentY:     p.curveExponentY     ?? 1.5,
+        curveSmoothing:     p.curveSmoothing     ?? 0,
         enhancePointerPrecision: p.enhancePointerPrecision ?? false, pollingRate: p.pollingRate ?? 1000,
       },
     }
@@ -103,9 +120,22 @@ export default function Profiles({ settings, updateSettings, activeProfileId, se
     } catch { showToast('Failed to apply') }
   }
 
+  async function applyPreset(presetId: string) {
+    const preset = GAME_PRESETS.find(p => p.id === presetId)
+    if (!preset) return
+    try {
+      await window.api.saveSettings(preset.settings as unknown as Record<string, unknown>)
+      await window.api.applyMouse(preset.settings)
+      updateSettings(preset.settings)
+      setActiveProfileId(`preset:${preset.id}`)
+      showToast(`Applied preset: ${preset.name}`)
+    } catch { showToast('Failed to apply preset') }
+  }
+
   async function persistProfile(updated: MouseProfile) {
     await window.api.profilesSave(updated)
     setProfiles(prev => prev.map(p => p.id === updated.id ? updated : p))
+    try { await window.api?.refreshTray?.() } catch { /* no-op */ }
   }
 
   async function saveToSlot(profile: MouseProfile) {
@@ -148,7 +178,7 @@ export default function Profiles({ settings, updateSettings, activeProfileId, se
 
   function summaryLine(s: MouseSettings) {
     const parts = [`${s.curveType.charAt(0).toUpperCase()}${s.curveType.slice(1)}`]
-    if (Math.abs((s.yxRatio ?? 1) - 1) > 0.02) parts.push(`V/H ${s.yxRatio.toFixed(2)}`)
+    if (Math.abs((s.yxRatio ?? 1) - 1) > 0.02) parts.push(`V/H ${(s.yxRatio ?? 1).toFixed(2)}`)
     parts.push(`${s.pollingRate}Hz`)
     return parts.join(' · ')
   }
@@ -164,6 +194,25 @@ export default function Profiles({ settings, updateSettings, activeProfileId, se
         <h1 className="page-title">Profiles</h1>
         <p className="page-sub">Click to apply · Right-click to save, rename, or share</p>
       </div>
+
+      <section className="section" style={{ marginBottom: 28 }}>
+        <div className="section-title">Built-in Presets</div>
+        <p className="field-hint" style={{ marginBottom: 10 }}>
+          Starting points tuned for different play styles. Click to apply — save to a slot below if you want to keep it.
+        </p>
+        <div className="preset-grid">
+          {GAME_PRESETS.map(p => (
+            <button
+              key={p.id}
+              className={`preset-card ${activeProfileId === `preset:${p.id}` ? 'preset-card-active' : ''}`}
+              onClick={() => applyPreset(p.id)}
+            >
+              <div className="preset-name">{p.name}</div>
+              <div className="preset-blurb">{p.blurb}</div>
+            </button>
+          ))}
+        </div>
+      </section>
 
       <div className="profile-grid">
         {profiles.map(profile => (

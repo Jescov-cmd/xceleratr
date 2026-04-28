@@ -108,3 +108,66 @@
 .swatch-light { background: #f3f3f3; border-color: rgba(0,0,0,0.15); }
 .swatch-dark  { background: #202020; }
 .swatch-hc    { background: #000000; border: 2px solid #1aebff; }
+
+/* Per-axis controls */
+.axis-tabs {
+  display: flex;
+  gap: 4px;
+  margin-top: 12px;
+  padding: 3px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.axis-tab {
+  flex: 1;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  padding: 7px 10px;
+  cursor: pointer;
+  transition: background 0.1s, color 0.1s;
+}
+
+.axis-tab:hover {
+  color: var(--text);
+  background: var(--bg-hover);
+}
+
+.axis-tab-active {
+  color: var(--active-text);
+  background: var(--active-bg);
+  font-weight: 600;
+}
+
+.axis-tag {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--active-text, var(--accent));
+  margin-left: 4px;
+  letter-spacing: 0.04em;
+}
+
+/* Curve button label + subtitle */
+.curve-btn-label {
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+
+.curve-btn-sub {
+  font-size: 9.5px;
+  font-weight: 400;
+  color: var(--text-muted);
+  letter-spacing: 0.02em;
+  margin-top: 1px;
+}
+
+.curve-btn-active .curve-btn-sub {
+  color: var(--active-text);
+  opacity: 0.85;
+}
