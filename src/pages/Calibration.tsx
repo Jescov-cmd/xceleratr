@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import './Page.css'
 import './Calibration.css'
 
@@ -22,14 +22,19 @@ function recommendedThreshold(cpi: number): number {
   return 25
 }
 
+// Need a sensible minimum or the user can produce CPI=0 by typing inches before
+// moving. 50px is small enough not to gatekeep legitimately tiny test strokes.
+const MIN_MEASURE_PIXELS = 50
+
 export default function Calibration() {
   const [stage, setStage] = useState<Stage>('intro')
   const [pixels, setPixels] = useState(0)
   const [inches, setInches] = useState('')
   const [cpi, setCpi]       = useState<number | null>(null)
-  const startedAtRef = useRef(0)
 
-  // Accumulate cursor pixel travel only while in 'measuring' stage
+  // Accumulate cursor pixel travel only while in 'measuring' stage.
+  // Note: pointermove only fires while the cursor is over the Xceleratr window;
+  // we tell the user to drag inside the window for that reason.
   useEffect(() => {
     if (stage !== 'measuring') return
     const onMove = (e: PointerEvent) => {
@@ -44,11 +49,13 @@ export default function Calibration() {
 
   const start = () => {
     setPixels(0); setInches(''); setCpi(null)
-    startedAtRef.current = performance.now()
     setStage('measuring')
   }
 
-  const stop = () => setStage('distance')
+  const stop = () => {
+    if (pixels < MIN_MEASURE_PIXELS) return
+    setStage('distance')
+  }
 
   const compute = () => {
     const n = parseFloat(inches)
@@ -70,7 +77,7 @@ export default function Calibration() {
           <ol className="cal-list">
             <li>Open Settings and set <strong>Curve Type</strong> to <em>Default</em> and turn <strong>EPP off</strong>. The test must run with no acceleration so the math is honest.</li>
             <li>Find a hard surface and a ruler. You'll be moving your mouse a measured distance.</li>
-            <li>You can also open Notepad or any window and drag in there — this app just listens to your cursor.</li>
+            <li>Move with the cursor <strong>inside this Xceleratr window</strong> — the measurement only counts pixels traveled over this window.</li>
           </ol>
           <button className="cal-btn cal-btn-primary" onClick={start}>I'm ready — start measuring</button>
         </section>
@@ -81,7 +88,8 @@ export default function Calibration() {
           <h2 className="cal-step">Move your mouse a known distance</h2>
           <p className="cal-hint">
             Move your mouse <strong>any distance you can measure</strong> on your desk —
-            4 inches and 10 cm both work. Move steadily; don't lift the mouse mid-stroke.
+            4 inches and 10 cm both work. Drag with the cursor over this window;
+            steady stroke, no lift mid-way.
           </p>
           <div className="cal-pixels">
             <span className="cal-pixels-label">Cursor travel</span>
@@ -89,7 +97,14 @@ export default function Calibration() {
           </div>
           <div className="cal-actions">
             <button className="cal-btn" onClick={() => setStage('intro')}>Cancel</button>
-            <button className="cal-btn cal-btn-primary" onClick={stop}>Stop &amp; continue</button>
+            <button
+              className="cal-btn cal-btn-primary"
+              onClick={stop}
+              disabled={pixels < MIN_MEASURE_PIXELS}
+              title={pixels < MIN_MEASURE_PIXELS ? `Move at least ${MIN_MEASURE_PIXELS}px first` : ''}
+            >
+              Stop &amp; continue
+            </button>
           </div>
         </section>
       )}

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import GlassIcon from './GlassIcon'
 import './Tooltip.css'
 
 interface Props {
@@ -27,7 +28,9 @@ export default function Tooltip({ text, size = 'sm' }: Props) {
       onMouseLeave={() => setOpen(false)}
       onClick={() => setOpen(o => !o)}
     >
-      <span className="tooltip-icon" aria-label="More info">?</span>
+      <span className="tooltip-icon" aria-label="More info">
+        <GlassIcon name="help" size={10} />
+      </span>
       {open && <span className="tooltip-bubble">{text}</span>}
     </span>
   )

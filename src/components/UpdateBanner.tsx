@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import GlassIcon from './GlassIcon'
 import './UpdateBanner.css'
 
 interface Status {
@@ -45,7 +46,7 @@ export default function UpdateBanner() {
           title="Dismiss"
           aria-label="Dismiss"
         >
-          ✕
+          <GlassIcon name="dismiss" size={14} />
         </button>
       </div>
     </div>

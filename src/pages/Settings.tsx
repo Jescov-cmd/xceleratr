@@ -3,6 +3,7 @@ import { AppSettings, CurvePoint, CurveType, DEFAULT_CUSTOM_POINTS } from '../ty
 import CurveGraph, { getCurveY } from '../components/CurveGraph'
 import CustomCurveEditor from '../components/CustomCurveEditor'
 import Tooltip from '../components/Tooltip'
+import GlassIcon from '../components/GlassIcon'
 import './Page.css'
 import './Settings.css'
 
@@ -54,6 +55,8 @@ export default function Settings({ settings, updateSettings }: Props) {
     }
     animId = requestAnimationFrame(animate)
 
+    // Three live-speed sources all max into targetXRef (see Home.tsx for the
+    // longer rationale). Tolerate slight jitter rather than risk a frozen dot.
     const onSpeed = (rawX: number) => {
       if (rawX > targetXRef.current) targetXRef.current = rawX
     }
@@ -257,7 +260,8 @@ export default function Settings({ settings, updateSettings }: Props) {
       )}
 
       <p className="epp-warning">
-        ⚠ Disable Windows Enhanced Pointer Precision for optimal experience
+        <GlassIcon name="warning" size={14} />
+        <span>Disable Windows Enhanced Pointer Precision for optimal experience</span>
       </p>
 
       {/* Parameters */}
@@ -412,9 +416,9 @@ export default function Settings({ settings, updateSettings }: Props) {
           disabled={saving === 'saving'}
         >
           {saving === 'saving' && 'Saving…'}
-          {saving === 'saved'  && '✓ Saved'}
+          {saving === 'saved'  && (<><GlassIcon name="check" size={14} /> Saved</>)}
           {saving === 'error'  && 'Error — try again'}
-          {saving === 'idle'   && 'Save to Cursor'}
+          {saving === 'idle'   && (<><GlassIcon name="save" size={14} /> Save to Cursor</>)}
         </button>
         {isDirty && saving === 'idle' && (
           <span className="save-dirty-label">Unsaved changes</span>

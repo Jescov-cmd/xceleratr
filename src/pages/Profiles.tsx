@@ -1,8 +1,34 @@
 import { useState, useEffect, useRef } from 'react'
-import { AppSettings, DEFAULT_CUSTOM_POINTS, MouseProfile, MouseSettings } from '../types'
+import { AppSettings, CurvePoint, CurveType, DEFAULT_CUSTOM_POINTS, MouseProfile, MouseSettings } from '../types'
 import { GAME_PRESETS } from '../data/gamePresets'
+import GlassIcon from '../components/GlassIcon'
 import './Page.css'
 import './Profiles.css'
+
+// Validation helpers for decodeProfile — share codes come from arbitrary users
+// so anything could be in there. Without these, malformed inputs become NaN
+// multipliers downstream, which freezes the cursor.
+const VALID_CURVE_TYPES: readonly CurveType[] =
+  ['default', 'linear', 'natural', 'power', 'sigmoid', 'bounce', 'classic', 'jump', 'custom']
+
+function clampNum(v: unknown, min: number, max: number, fallback: number): number {
+  const n = Number(v)
+  if (!isFinite(n)) return fallback
+  return Math.max(min, Math.min(max, n))
+}
+function asCurveType(v: unknown): CurveType {
+  return (VALID_CURVE_TYPES as readonly string[]).includes(v as string) ? (v as CurveType) : 'default'
+}
+function asPoints(v: unknown): CurvePoint[] {
+  if (!Array.isArray(v)) return DEFAULT_CUSTOM_POINTS
+  const cleaned = v
+    .filter(p => p && typeof p === 'object' && isFinite(Number((p as any).x)) && isFinite(Number((p as any).y)))
+    .map(p => ({
+      x: clampNum((p as any).x, 0, 1, 0),
+      y: clampNum((p as any).y, 0.1, 6, 1),
+    }))
+  return cleaned.length >= 2 ? cleaned : DEFAULT_CUSTOM_POINTS
+}
 
 interface Props {
   settings: AppSettings
@@ -36,32 +62,50 @@ function toMouseSettings(s: AppSettings): MouseSettings {
   }
 }
 
-function encodeProfile(name: string, s: MouseSettings): string {
-  return 'XC1:' + btoa(JSON.stringify({ v: 1, name, ...s }))
+function encodeProfile(name: string, s: MouseSettings, sharedBy?: string): string {
+  // sharedBy travels with the share code so the recipient knows who made it.
+  // Optional — older codes pre-1.3.x don't include it; decoder treats it as
+  // "Unknown".
+  const payload: Record<string, unknown> = { v: 1, name, ...s }
+  if (sharedBy && sharedBy.trim().length > 0) payload.sharedBy = sharedBy.trim().slice(0, 60)
+  return 'XC1:' + btoa(JSON.stringify(payload))
 }
 
-function decodeProfile(code: string): { name: string; settings: MouseSettings } | null {
+function decodeProfile(code: string): { name: string; sharedBy?: string; settings: MouseSettings } | null {
   try {
     const b64 = code.trim().startsWith('XC1:') ? code.trim().slice(4) : code.trim()
     const p = JSON.parse(atob(b64))
     if (!p.v) return null
+    // Strict per-field validation. Untrusted input — string "abc" sneaking into
+    // a numeric field used to silently propagate as NaN through the multiplier
+    // and freeze the cursor when the profile was applied.
+    const name = typeof p.name === 'string' && p.name.length <= 60
+      ? p.name : 'Imported'
+    const sharedBy = typeof p.sharedBy === 'string' && p.sharedBy.trim().length > 0
+      ? p.sharedBy.trim().slice(0, 60)
+      : undefined
     return {
-      name: typeof p.name === 'string' ? p.name : 'Imported',
+      name,
+      sharedBy,
       settings: {
-        yxRatio: p.yxRatio ?? 1, yxRatioEnabled: p.yxRatioEnabled ?? true,
-        curveType: p.curveType ?? 'default',
-        customCurvePoints: Array.isArray(p.customCurvePoints) ? p.customCurvePoints : DEFAULT_CUSTOM_POINTS,
-        curveAcceleration: p.curveAcceleration ?? 100, accelerationEnabled: p.accelerationEnabled ?? true,
-        curveThreshold: p.curveThreshold ?? 50, curveExponent: p.curveExponent ?? 1.5,
-        // Per-axis fields default to off / safe values when missing (older XC1: codes)
-        perAxisEnabled: p.perAxisEnabled ?? false,
-        curveTypeY: p.curveTypeY ?? 'default',
-        customCurvePointsY: Array.isArray(p.customCurvePointsY) ? p.customCurvePointsY : DEFAULT_CUSTOM_POINTS,
-        curveAccelerationY: p.curveAccelerationY ?? 100,
-        curveThresholdY:    p.curveThresholdY    ?? 50,
-        curveExponentY:     p.curveExponentY     ?? 1.5,
-        curveSmoothing:     p.curveSmoothing     ?? 0,
-        enhancePointerPrecision: p.enhancePointerPrecision ?? false, pollingRate: p.pollingRate ?? 1000,
+        yxRatio:                 clampNum(p.yxRatio, 0.1, 5, 1),
+        yxRatioEnabled:          p.yxRatioEnabled !== false,
+        curveType:               asCurveType(p.curveType),
+        customCurvePoints:       asPoints(p.customCurvePoints),
+        curveAcceleration:       clampNum(p.curveAcceleration, 0, 500, 100),
+        accelerationEnabled:     p.accelerationEnabled !== false,
+        curveThreshold:          clampNum(p.curveThreshold, 0, 100, 50),
+        curveExponent:           clampNum(p.curveExponent, 0.1, 5, 1.5),
+        // Per-axis defaults applied when older XC1: codes are missing them
+        perAxisEnabled:          !!p.perAxisEnabled,
+        curveTypeY:              asCurveType(p.curveTypeY),
+        customCurvePointsY:      asPoints(p.customCurvePointsY),
+        curveAccelerationY:      clampNum(p.curveAccelerationY, 0, 500, 100),
+        curveThresholdY:         clampNum(p.curveThresholdY, 0, 100, 50),
+        curveExponentY:          clampNum(p.curveExponentY, 0.1, 5, 1.5),
+        curveSmoothing:          clampNum(p.curveSmoothing, 0, 100, 0),
+        enhancePointerPrecision: !!p.enhancePointerPrecision,
+        pollingRate:             clampNum(p.pollingRate, 100, 8000, 1000),
       },
     }
   } catch { return null }
@@ -161,19 +205,30 @@ export default function Profiles({ settings, updateSettings, activeProfileId, se
 
   function copyCode(profile: MouseProfile) {
     if (!profile.settings) return
-    navigator.clipboard.writeText(encodeProfile(profile.name, profile.settings))
+    // Stamp the current user's name into the code so the recipient sees who
+    // shared it. Empty userName → encoded as anonymous (decoder shows "Unknown").
+    navigator.clipboard.writeText(encodeProfile(profile.name, profile.settings, settings.userName))
       .then(() => showToast('Share code copied'))
   }
 
-  function handleImport() {
+  // Decode the pasted code on every keystroke so we can preview who shared it
+  // before the user commits to the import. Falls back to null on invalid input.
+  const importPreview = importCode.trim() ? decodeProfile(importCode) : null
+
+  async function handleImport() {
     setImportError('')
     const result = decodeProfile(importCode)
     if (!result) { setImportError('Invalid share code — paste a code starting with XC1:'); return }
     const target = profiles.find(p => p.id === importSlot)
     if (!target) return
-    persistProfile({ ...target, name: result.name, settings: result.settings, savedAt: new Date().toISOString() })
-    setImportCode('')
-    showToast(`Imported "${result.name}" → ${target.name}`)
+    try {
+      await persistProfile({ ...target, name: result.name, settings: result.settings, savedAt: new Date().toISOString() })
+      setImportCode('')
+      const fromLabel = result.sharedBy ? ` (from ${result.sharedBy})` : ''
+      showToast(`Imported "${result.name}"${fromLabel} → ${target.name}`)
+    } catch {
+      setImportError('Import failed — try again')
+    }
   }
 
   function summaryLine(s: MouseSettings) {
@@ -247,6 +302,14 @@ export default function Profiles({ settings, updateSettings, activeProfileId, se
                 <span className="profile-name">{profile.name}</span>
               )}
               {profile.id === 'default' && <span className="profile-badge">DEFAULT</span>}
+              <button
+                className="profile-save-btn"
+                onClick={e => { e.stopPropagation(); saveToSlot(profile) }}
+                title={profile.settings ? 'Overwrite with current settings' : 'Save current settings here'}
+                aria-label="Save current settings to this slot"
+              >
+                <GlassIcon name="save" size={13} />
+              </button>
             </div>
 
             {profile.settings ? (
@@ -313,6 +376,14 @@ export default function Profiles({ settings, updateSettings, activeProfileId, se
             placeholder="Paste XC1:… share code here"
             rows={3}
           />
+          {importPreview && !importError && (
+            <p className="import-preview">
+              <strong>{importPreview.name}</strong>
+              {importPreview.sharedBy
+                ? <> · shared by <strong>{importPreview.sharedBy}</strong></>
+                : <> · sharer unknown</>}
+            </p>
+          )}
           {importError && <p className="import-err">{importError}</p>}
           <div className="import-row">
             <div className="import-slot-wrap">

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { AppSettings } from '../types'
+import { validateUsername, generateUsername } from '../utils/username'
 import './UserMenu.css'
 
 interface Props {
@@ -61,12 +62,33 @@ export default function UserMenu({ settings, updateSettings }: Props) {
   }
 
   const handleSave = async () => {
+    const trimmed = draft.userName.trim().slice(0, 40)
+
+    // Username is required. If they cleared it, generate a placeholder
+    // (User###### with random digits) instead of refusing to save.
+    let finalName = trimmed
+    if (trimmed.length === 0) {
+      finalName = generateUsername()
+    } else {
+      // Block slurs / obvious profanity. Show inline warning, keep dialog open
+      // so they can edit instead of dismissing without saving.
+      const check = validateUsername(trimmed)
+      if (!check.ok) {
+        setError(check.reason ?? 'Invalid username')
+        return
+      }
+    }
+
     const patch: Partial<AppSettings> = {
-      userName:   draft.userName.trim().slice(0, 40),
+      userName:   finalName,
       userEmail:  draft.userEmail.trim().slice(0, 80),
       userPhone:  draft.userPhone.trim().slice(0, 30),
       userAvatar: draft.userAvatar,
     }
+    // Reflect any auto-generation back into the local draft so the popover
+    // shows the generated name briefly before closing.
+    setDraft(d => ({ ...d, userName: finalName }))
+    setError('')
     updateSettings(patch)
     try { await window.api?.saveSettings?.(patch as Record<string, unknown>) } catch { /* no-op */ }
     setOpen(false)
@@ -111,12 +133,15 @@ export default function UserMenu({ settings, updateSettings }: Props) {
 
           <div className="user-form">
             <label className="user-field">
-              <span>Display name</span>
+              <span>Display name <em>(shown when sharing profiles)</em></span>
               <input
                 type="text"
                 value={draft.userName}
-                onChange={e => setDraft(d => ({ ...d, userName: e.target.value }))}
-                placeholder="e.g. Jaxson"
+                onChange={e => {
+                  setDraft(d => ({ ...d, userName: e.target.value }))
+                  if (error) setError('')
+                }}
+                placeholder="Your display name — leave blank to auto-generate"
                 maxLength={40}
               />
             </label>

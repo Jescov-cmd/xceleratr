@@ -107,7 +107,9 @@
 }
 
 .ww-card:hover {
-  border-color: var(--active-border, var(--accent));
+  border-color: var(--accent-border-hov);
+  background: var(--accent-tint);
+  filter: var(--accent-glow);
 }
 
 .ww-card-active {
@@ -149,7 +151,9 @@
 }
 
 .ww-arch:hover {
-  border-color: var(--active-border, var(--accent));
+  border-color: var(--accent-border-hov);
+  background: var(--accent-tint);
+  filter: var(--accent-glow);
 }
 
 .ww-arch-active {
@@ -188,12 +192,13 @@
   border-radius: 6px;
   padding: 8px 16px;
   cursor: pointer;
-  transition: border-color 0.1s, background 0.1s;
+  transition: border-color 0.1s, background 0.1s, filter 0.1s;
 }
 
 .ww-btn:hover {
-  border-color: var(--active-border, var(--accent));
-  background: var(--bg-hover);
+  border-color: var(--accent-border-hov);
+  background: var(--accent-tint);
+  filter: var(--accent-glow);
 }
 
 .ww-btn-primary {

@@ -30,6 +30,12 @@ export default function Home({ settings }: Props) {
     }
     animId = requestAnimationFrame(animate)
 
+    // Three live-speed sources all max into targetXRef. The dot will move as
+    // long as ANY of them is delivering — pointermove for "cursor over our
+    // window", IPC live-speed for system-wide. Past attempts to dedupe these
+    // (stop polling once worker is broadcasting, etc.) ended with the dot
+    // freezing whenever any single source had a hiccup. Tolerate slight jitter
+    // from differing normalizations rather than risk losing the dot entirely.
     const onSpeed = (rawX: number) => {
       if (rawX > targetXRef.current) targetXRef.current = rawX
     }

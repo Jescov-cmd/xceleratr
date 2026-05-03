@@ -49,12 +49,17 @@
 }
 
 .compare-slot-tag {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-size: 10.5px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: var(--text-muted);
 }
+
+.compare-slot-tag .glass-icon { flex-shrink: 0; }
 
 .compare-slot-select {
   font-family: inherit;
@@ -113,6 +118,9 @@
 }
 
 .compare-hotkey-missing {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
   font-size: 12px;
   color: #c98900;
   padding: 10px 12px;
@@ -120,5 +128,7 @@
   border: 1px solid rgba(255, 184, 0, 0.4);
   border-radius: 6px;
 }
+
+.compare-hotkey-missing .glass-icon { margin-top: 1px; flex-shrink: 0; }
 
 .theme-dark .compare-hotkey-missing { color: #ffc857; }

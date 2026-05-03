@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { AppSettings } from '../types'
+import GlassIcon from '../components/GlassIcon'
 import './Page.css'
 import './Settings.css'
 
@@ -88,9 +89,9 @@ export default function Preferences({ settings, updateSettings }: Props) {
         <div className="save-row">
           <button className="save-btn" onClick={handleSaveStartup} disabled={status === 'saving'}>
             {status === 'saving' && 'Saving…'}
-            {status === 'saved'  && 'Saved'}
+            {status === 'saved'  && (<><GlassIcon name="check" size={14} /> Saved</>)}
             {status === 'error'  && 'Error — try again'}
-            {status === 'idle'   && 'Save startup setting'}
+            {status === 'idle'   && (<><GlassIcon name="save" size={14} /> Save startup setting</>)}
           </button>
           {status === 'saved' && <span className="save-status ok">{startOnBoot ? 'Startup enabled' : 'Startup disabled'}</span>}
           {status === 'error' && <span className="save-status err">Failed.</span>}

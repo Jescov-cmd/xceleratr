@@ -7,7 +7,7 @@ interface Props {
 }
 
 // Convert a KeyboardEvent into an Electron accelerator string ("CommandOrControl+Alt+X").
-// Returns '' if only modifiers were pressed (capture should keep listening).
+// Returns '' if the combo isn't valid yet (capture keeps listening).
 function eventToAccelerator(e: KeyboardEvent): string {
   const parts: string[] = []
   if (e.ctrlKey || e.metaKey) parts.push('CommandOrControl')
@@ -16,6 +16,12 @@ function eventToAccelerator(e: KeyboardEvent): string {
 
   let key = e.key
   if (['Control', 'Meta', 'Alt', 'Shift'].includes(key)) return ''  // modifiers alone
+
+  // Function keys can be bound bare (F1–F24); everything else must have a
+  // modifier or globalShortcut.register() rejects it silently and the binding
+  // appears set in the UI but does nothing. Bail before we save garbage.
+  const isFunctionKey = /^F([1-9]|1\d|2[0-4])$/.test(key)
+  if (parts.length === 0 && !isFunctionKey) return ''
 
   // Map browser key names → Electron accelerator names
   if (key === ' ')           key = 'Space'

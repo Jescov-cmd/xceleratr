@@ -21,8 +21,27 @@
   overflow-y: auto;
   overflow-x: hidden;
   padding: 28px 32px;
-  background: var(--bg);
+  /* Very faint accent-tinted radial gradient in the upper-right gives the
+     content a subtle sense of place + light source, without crowding the
+     surface. The base flat var(--bg) underlies it. */
+  background:
+    radial-gradient(
+      ellipse 600px 400px at 100% 0%,
+      color-mix(in srgb, var(--accent) 6%, transparent),
+      transparent 60%
+    ),
+    var(--bg);
   -webkit-app-region: no-drag;
   contain: paint;
   isolation: isolate;
+  /* Match the .app's inner rounded corners (8px outer minus 1px border = 7px
+     inner radius) so .content's solid bg never pokes past the rounded edge.
+     contain: paint creates a paint containment that can defeat parent
+     overflow:hidden clipping in some Chromium builds — owning the radius
+     here makes it deterministic. Top corners stay square because the title
+     bar covers them. */
+  border-radius: 0 0 7px 7px;
 }
+
+/* HC theme intentionally uses flat surfaces — drop the gradient. */
+.theme-high-contrast .content { background: var(--bg); }

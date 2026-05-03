@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { AppSettings, HotkeyAction } from '../types'
 import HotkeyCapture from '../components/HotkeyCapture'
+import GlassIcon from '../components/GlassIcon'
 import './Page.css'
 
 interface Props {
@@ -117,7 +118,10 @@ export default function Hotkeys({ settings, updateSettings }: Props) {
       )}
 
       <div className="info-box">
-        <div className="info-title">How to record a hotkey</div>
+        <div className="info-title">
+          <GlassIcon name="info" size={14} />
+          <span>How to record a hotkey</span>
+        </div>
         <ul className="info-list">
           <li>Click <strong>Set</strong> (or <strong>Change</strong>) next to the action you want.</li>
           <li>Press the key combination you want — for example, <kbd className="kbd">Ctrl + Alt + 1</kbd>.</li>

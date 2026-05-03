@@ -118,6 +118,18 @@ function persistSettings(patch: Partial<Settings>): Settings {
   return updated
 }
 
+// Username is required (it's embedded in shared profile codes so recipients
+// can see who shared it). If the persisted value is blank/missing, generate a
+// branded "Xcel-######" placeholder once and persist so it stays stable
+// across launches. Format mirrors src/utils/username.ts generateUsername().
+function ensureUserName() {
+  const s = loadSettings()
+  if (!s.userName || String(s.userName).trim() === '') {
+    const n = Math.floor(100000 + Math.random() * 900000)
+    persistSettings({ userName: `Xcel-${n}` })
+  }
+}
+
 // ── Original mouse settings (restored on quit) ───────────────────────────────
 
 interface OrigMouse { sensitivity: string; speed: string; thresh1: string; thresh2: string }
@@ -240,8 +252,29 @@ function startHookWorker(curve: HookCurve) {
         worker.postMessage({ type: 'apply', curve })
         if (isDev) console.log('[xceleratr] hook worker ready')
       } else if (msg.type === 'speed') {
-        if (isDev && !(worker as any)._speedLogged) { (worker as any)._speedLogged = true; console.log('[xceleratr] first speed msg, x:', msg.x.toFixed(3)) }
+        if (isDev && !(worker as any)._speedLogged) {
+          ;(worker as any)._speedLogged = true
+          console.log('[xceleratr] first speed msg, x:', msg.x.toFixed(3))
+        }
         mainWindow?.webContents.send('live-speed', msg.x)
+      } else if (msg.type === 'install' && isDev) {
+        // Log every install so we can verify the hook is registered with the
+        // right curve params — useful when "the curve isn't working".
+        const status = msg.ok ? 'OK' : 'FAILED — SetWindowsHookEx returned null'
+        console.log(
+          `[xceleratr] hook install ${status} ` +
+          `curve=${msg.curveType} accel=${msg.accelEnabled ? msg.accel + '%' : 'OFF'} ` +
+          `thresh=${msg.threshold} exp=${msg.exponent} smooth=${msg.smoothing} ` +
+          `polling=${msg.pollingRate}Hz perAxis=${msg.perAxis}`
+        )
+      } else if (msg.type === 'first-mult' && isDev) {
+        // First time the curve produces a non-trivial multiplier on a real
+        // mouse event. If you never see this line after moving the mouse, the
+        // hook isn't firing or the curve isn't shaping the delta.
+        console.log(
+          `[xceleratr] curve fired: dx=${msg.dx} dy=${msg.dy} ` +
+          `multX=${msg.multX.toFixed(3)} multY=${msg.multY.toFixed(3)} speed=${msg.speed.toFixed(2)}`
+        )
       } else if (msg.type === 'error' && isDev) {
         console.error('[xceleratr] hook callback error:', msg.msg)
       }
@@ -503,6 +536,7 @@ if (!isDev) app.on('second-instance', () => { if (mainWindow) { mainWindow.show(
 app.whenReady().then(() => {
   app.setName('Xceleratr')
   if (IS_WIN) app.setAppUserModelId('com.xceleratr.app')
+  ensureUserName()  // generate User###### if blank, before any IPC reads settings
   initWinAPIs()
   createWindow()
   createTray()
@@ -590,8 +624,6 @@ async function applyWin(s: {
   curveAccelerationY?: number; curveThresholdY?: number; curveExponentY?: number
   curveSmoothing?: number
 }) {
-  await captureOriginalsAsync()   // must complete before any regWrite
-
   // ── Acceleration / EPP ──
   const effectiveRatio = s.yxRatioEnabled ? s.yxRatio : 1.0
   const perAxis = !!s.perAxisEnabled
@@ -599,6 +631,31 @@ async function applyWin(s: {
   const xShapesActive = s.accelerationEnabled && s.curveType !== 'default'
   const useHook = xShapesActive || yShapesActive || (!perAxis && Math.abs(effectiveRatio - 1) > 0.02)
   const useEPP  = s.enhancePointerPrecision && !useHook
+
+  // Kick off the hook worker first. Spawning the worker thread + cold-loading
+  // koffi inside it dominates boot-to-curve-active time (~150–500ms). Running
+  // it in parallel with captureOriginalsAsync (and the regWrites that follow)
+  // shaves the perceived "settings haven't kicked in yet" window after launch.
+  // On subsequent calls (worker already alive) this just postMessages.
+  startHookWorker({
+    curveType:           s.curveType,
+    customCurvePoints:   s.customCurvePoints,
+    curveAcceleration:   s.curveAcceleration,
+    accelerationEnabled: s.accelerationEnabled,
+    curveThreshold:      s.curveThreshold,
+    curveExponent:       s.curveExponent,
+    pollingRate:         s.pollingRate,
+    yxRatio:             effectiveRatio,
+    perAxisEnabled:      perAxis,
+    curveTypeY:          s.curveTypeY          ?? 'default',
+    customCurvePointsY:  s.customCurvePointsY  ?? [],
+    curveAccelerationY:  s.curveAccelerationY  ?? 100,
+    curveThresholdY:     s.curveThresholdY     ?? 50,
+    curveExponentY:      s.curveExponentY      ?? 1.5,
+    curveSmoothing:      s.curveSmoothing      ?? 0,
+  })
+
+  await captureOriginalsAsync()   // must complete before any regWrite
 
   let mouseSpeed: number, thr1: number, thr2: number
   if (useEPP) {
@@ -617,36 +674,19 @@ async function applyWin(s: {
     regWriteAsync('MouseThreshold1', '0')
     regWriteAsync('MouseThreshold2', '0')
   }
-
-  // ── Hook worker ──
-  // Always keep the worker alive — it broadcasts live-speed data for the graph
-  // even when the curve is 'default' and no movement modification is needed.
-  // The worker callback handles passthrough cleanly when mult ≈ 1 and ratio ≈ 1.
-  startHookWorker({
-    curveType:           s.curveType,
-    customCurvePoints:   s.customCurvePoints,
-    curveAcceleration:   s.curveAcceleration,
-    accelerationEnabled: s.accelerationEnabled,
-    curveThreshold:      s.curveThreshold,
-    curveExponent:       s.curveExponent,
-    pollingRate:         s.pollingRate,
-    yxRatio:             effectiveRatio,
-    perAxisEnabled:      perAxis,
-    curveTypeY:          s.curveTypeY          ?? 'default',
-    customCurvePointsY:  s.customCurvePointsY  ?? [],
-    curveAccelerationY:  s.curveAccelerationY  ?? 100,
-    curveThresholdY:     s.curveThresholdY     ?? 50,
-    curveExponentY:      s.curveExponentY      ?? 1.5,
-    curveSmoothing:      s.curveSmoothing      ?? 0,
-  })
 }
 
 function applyMac(s: { accelerationEnabled: boolean }) {
   try {
     if (!s.accelerationEnabled) {
       execFileSync('defaults', ['write', '-g', 'com.apple.mouse.scaling', '-1'], { stdio: 'ignore' })
+    } else {
+      // Restore default macOS scaling so re-enabling actually undoes the -1 we set
+      // earlier. `defaults delete` removes our override and lets the OS fall back
+      // to the user's last value (or system default, ~0.875). Without this the
+      // scaling stays stuck at -1 across toggles — a real "off doesn't undo" bug.
+      execFileSync('defaults', ['delete', '-g', 'com.apple.mouse.scaling'], { stdio: 'ignore' })
     }
-    // Pointer speed is OS-controlled; only disable system acceleration when requested
   } catch { /* no-op */ }
 }
 
@@ -697,12 +737,18 @@ function setStartupWin(enable: boolean) {
 function getStartupMac(): boolean { return fs.existsSync(MAC_PLIST) }
 function setStartupMac(enable: boolean) {
   if (enable) {
+    // Pass --startup so the launched app starts silently in the menu bar instead
+    // of popping its window open at every login (matches the Windows autostart
+    // command which already includes this flag).
     const plist = `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
   <key>Label</key><string>com.xceleratr.app</string>
-  <key>ProgramArguments</key><array><string>${process.execPath}</string></array>
+  <key>ProgramArguments</key><array>
+    <string>${process.execPath}</string>
+    <string>--startup</string>
+  </array>
   <key>RunAtLoad</key><true/><key>KeepAlive</key><false/>
 </dict>
 </plist>`

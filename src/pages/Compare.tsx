@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { AppSettings, MouseProfile } from '../types'
+import GlassIcon from '../components/GlassIcon'
 import './Page.css'
 import './Compare.css'
 
@@ -46,7 +47,10 @@ export default function Compare({ settings, updateSettings }: Props) {
       </div>
 
       <div className="info-box compare-howto">
-        <div className="info-title">How this works</div>
+        <div className="info-title">
+          <GlassIcon name="info" size={14} />
+          <span>How this works</span>
+        </div>
         <ol className="info-list compare-steps">
           <li>Pick two saved profiles below — these become "Profile 1" and "Profile 2".</li>
           <li>Open <strong>Hotkeys</strong> in the sidebar and set a binding for "A/B compare" (e.g. <kbd className="kbd">Ctrl + Alt + C</kbd>).</li>
@@ -92,7 +96,8 @@ export default function Compare({ settings, updateSettings }: Props) {
           </div>
         ) : (
           <div className="compare-hotkey-missing">
-            ⚠ No hotkey set yet — go to the <strong>Hotkeys</strong> page and set "A/B compare" before this can work.
+            <GlassIcon name="warning" size={14} />
+            <span>No hotkey set yet — go to the <strong>Hotkeys</strong> page and set "A/B compare" before this can work.</span>
           </div>
         )}
       </section>
@@ -112,7 +117,10 @@ interface SlotProps {
 function CompareSlot({ slotLabel, color, profiles, selectedId, onChange, selectedProfile }: SlotProps) {
   return (
     <div className={`compare-slot compare-slot-${color.toLowerCase()}`}>
-      <div className="compare-slot-tag">{slotLabel}</div>
+      <div className="compare-slot-tag">
+        <GlassIcon name="profiles" size={14} />
+        <span>{slotLabel}</span>
+      </div>
       <select
         className="compare-slot-select"
         value={selectedId ?? ''}

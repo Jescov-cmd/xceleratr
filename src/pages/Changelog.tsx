@@ -11,9 +11,34 @@ interface Release {
 // Newest first. Add a new entry at the top each release.
 const RELEASES: Release[] = [
   {
+    version: '1.4.0',
+    date:    '2026-05-02',
+    tag:     'current',
+    changes: [
+      { type: 'added',   text: 'Local username — required field shown when sharing profiles. Auto-generated as Xcel-###### if you leave it blank, with inappropriate names blocked and a clear inline warning.' },
+      { type: 'added',   text: 'Shared profiles now show who made them. Paste a share code and you\'ll see "shared by [Username]" before importing, and the import toast confirms the source.' },
+      { type: 'added',   text: 'One-click save on every profile card — a small save icon button overwrites the slot with your current settings instead of needing right-click → menu.' },
+      { type: 'added',   text: 'Every interactive button now glows in your system accent color on hover (close stays Windows-red, Premium stays gold by design).' },
+      { type: 'added',   text: 'New unified icon set across the entire app: sidebar nav, support, warnings, save, info, help, dismiss, and inline buttons all share the same coolicons-based style.' },
+      { type: 'changed', text: 'New brand mark — the hexagon is gone. The mouse silhouette replaces it everywhere: sidebar, taskbar, system tray, alt-tab, installer, .exe icon, and welcome wizard.' },
+      { type: 'changed', text: 'Visual polish pass — gradient surfaces on the sidebar / title bar, soft shadows + inset highlights on cards, accent gradient hairline under page headers, modern variable-axis font on the title bar.' },
+      { type: 'changed', text: 'Premium button restyled as a small pill with yellow theme, gentle hover halo, and a subtle "Soon" chip.' },
+      { type: 'fixed',   text: 'Curves now actually shape cursor movement — the engine was evaluating the curve at ~8% of its domain regardless of what the graph showed. Same setting now feels noticeably more aggressive (because it always should have).' },
+      { type: 'fixed',   text: 'Curve smoothing slider works as advertised. Previously smoothed the multiplier (a no-op in practice); now smooths the output delta with sub-pixel remainder accumulation, so 0–100% gives a real range from instant to buttery-laggy.' },
+      { type: 'fixed',   text: 'Live speed dot tracks reliably even if the hook hiccups or the cursor leaves the window — three-source fallback keeps it alive.' },
+      { type: 'fixed',   text: 'Importing a profile share code with malformed values can no longer freeze the cursor (NaN was leaking through the multiplier).' },
+      { type: 'fixed',   text: 'Mac: toggling acceleration off and back on now restores the OS default mouse scaling instead of leaving it stuck at -1.' },
+      { type: 'fixed',   text: 'Mac autostart now launches silently into the menu bar instead of popping the window open at every login.' },
+      { type: 'fixed',   text: 'Hotkey capture refuses bare keys without modifiers — they were silently rejected by the OS, so the UI used to show "set" but the binding did nothing.' },
+      { type: 'fixed',   text: 'Calibration page: prevents you from computing CPI from no movement; instructions corrected (drag inside this window, not Notepad).' },
+      { type: 'fixed',   text: 'Tiny black corner at the bottom of the rounded window is gone.' },
+      { type: 'fixed',   text: 'Icon swap workflow finally sticks — `npm run icons` now updates both source and runtime locations so changes show up immediately instead of clinging to the previous build\'s images.' },
+      { type: 'removed', text: 'Speed histogram backdrop on the curve graph (the faint vertical bars that filled in as you moved). The graph reads cleaner without them.' },
+    ],
+  },
+  {
     version: '1.3.1',
     date:    '2026-04-28',
-    tag:     'current',
     changes: [
       { type: 'changed', text: 'New hexagonal app icon — replaces the old icon everywhere: title bar, sidebar, welcome screen, taskbar, system tray, installer, and the .exe itself.' },
       { type: 'changed', text: 'Sidebar reorganized for clarity — eight tabs now: Home, Curves, Profiles, Compare, Hotkeys, Calibrate, Preferences, What\'s New.' },

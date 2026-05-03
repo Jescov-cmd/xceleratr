@@ -121,8 +121,3 @@
   opacity: 0.45;
   stroke-dasharray: 5 4;
 }
-
-.cg-hist {
-  fill: var(--accent);
-  pointer-events: none;
-}

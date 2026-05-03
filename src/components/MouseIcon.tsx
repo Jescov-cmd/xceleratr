@@ -4,8 +4,9 @@ interface Props {
   className?: string
 }
 
-// Hexagonal brand mark — geometric tech feel. Color is set by `currentColor`
-// in the parent (theme-aware: white on dark, black on light, max contrast in HC).
+// Brand mark — coolicons "Mouse" silhouette: rounded body with a vertical
+// scroll-wheel stroke. Color is set by `currentColor` in the parent so it
+// stays theme-aware (white on dark, black on light, max contrast in HC).
 export default function MouseIcon({ size = 36, strokeWidth = 1.6, className }: Props) {
   return (
     <svg
@@ -20,8 +21,7 @@ export default function MouseIcon({ size = 36, strokeWidth = 1.6, className }: P
       className={className}
       aria-hidden="true"
     >
-      <polygon points="12,2 19.5,6.5 19.5,17.5 12,22 4.5,17.5 4.5,6.5" />
-      <path d="M12 7v3.5" strokeWidth={strokeWidth + 0.6} />
+      <path d="M12 10V7M18 9V15C18 18.3137 15.3137 21 12 21C8.68629 21 6 18.3137 6 15V9C6 5.68629 8.68629 3 12 3C15.3137 3 18 5.68629 18 9Z" />
     </svg>
   )
 }

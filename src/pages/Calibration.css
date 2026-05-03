@@ -108,10 +108,14 @@
   border-radius: 4px;
   padding: 7px 14px;
   cursor: pointer;
-  transition: border-color 0.1s, background 0.1s;
+  transition: border-color 0.1s, background 0.1s, filter 0.1s;
 }
 
-.cal-btn:hover { border-color: var(--active-border, var(--accent)); background: var(--bg-hover); }
+.cal-btn:hover {
+  border-color: var(--accent-border-hov);
+  background: var(--accent-tint);
+  filter: var(--accent-glow);
+}
 
 .cal-btn-primary {
   background: var(--accent, #3478f6);

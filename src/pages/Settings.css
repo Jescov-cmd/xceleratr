@@ -50,14 +50,15 @@
   font-size: 11.5px;
   font-weight: 400;
   font-family: inherit;
-  transition: border-color 0.1s, background 0.1s, color 0.1s;
+  transition: border-color 0.1s, background 0.1s, color 0.1s, filter 0.1s;
   min-width: 58px;
 }
 
 .curve-btn:hover {
-  background: var(--bg-hover);
+  background: var(--accent-tint);
   color: var(--text);
-  border-color: var(--text-muted);
+  border-color: var(--accent-border-hov);
+  filter: var(--accent-glow);
 }
 
 .curve-btn-active {
@@ -85,11 +86,13 @@
   font-size: 13px;
   font-weight: 400;
   font-family: inherit;
-  transition: border-color 0.1s, background 0.1s;
+  transition: border-color 0.1s, background 0.1s, filter 0.1s;
 }
 
 .theme-btn:hover {
-  background: var(--bg-hover);
+  background: var(--accent-tint);
+  border-color: var(--accent-border-hov);
+  filter: var(--accent-glow);
 }
 
 .theme-btn-active {
@@ -136,7 +139,7 @@
 
 .axis-tab:hover {
   color: var(--text);
-  background: var(--bg-hover);
+  background: var(--accent-tint);
 }
 
 .axis-tab-active {

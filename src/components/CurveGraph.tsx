@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { AppSettings, CurvePoint, CurveType } from '../types'
 import './CurveGraph.css'
 
@@ -113,28 +113,10 @@ export const CURVE_LABELS: Record<CurveType, string> = {
   custom:   'Custom — user-defined curve',
 }
 
-const HIST_BUCKETS = 32
-
 export default function CurveGraph({ settings, height = 200, liveX, inactiveCurve, activeAxis }: Props) {
   const { curveType, customCurvePoints, curveAcceleration, curveThreshold, curveExponent, yxRatio } = settings
   const ratio = yxRatio ?? 1
 
-  // Speed histogram — counts how often live input speeds land in each bucket,
-  // with gentle decay so old activity fades. Drawn as a faint backdrop showing
-  // where on the curve the user actually spends their time.
-  const [hist, setHist] = useState<number[]>(() => new Array(HIST_BUCKETS).fill(0))
-  useEffect(() => {
-    if (liveX === undefined) return
-    setHist(prev => {
-      const next = prev.map(v => v * 0.997)  // slow decay (~5min half-life at 60fps)
-      if (liveX > 0.01) {
-        const idx = Math.min(HIST_BUCKETS - 1, Math.floor(liveX * HIST_BUCKETS))
-        next[idx] += 1
-      }
-      return next
-    })
-  }, [liveX])
-  const histMax = useMemo(() => Math.max(0.01, ...hist), [hist])
   // V/H ratio overlay is hidden when in per-axis mode (it's superseded by the inactive curve)
   const showRatio = !activeAxis && Math.abs(ratio - 1) > 0.02
 
@@ -210,23 +192,6 @@ export default function CurveGraph({ settings, height = 200, liveX, inactiveCurv
         <span className="cg-title">{CURVE_LABELS[curveType]}</span>
       </div>
       <svg viewBox={`0 0 ${W} ${H}`} className="cg-svg">
-        {/* Speed histogram backdrop — shows where the user has been moving recently */}
-        {hist.map((count, i) => {
-          const intensity = Math.min(1, count / histMax)
-          if (intensity < 0.04) return null
-          const xL = sx(i / HIST_BUCKETS)
-          const xR = sx((i + 1) / HIST_BUCKETS)
-          return (
-            <rect
-              key={`h${i}`}
-              x={xL} y={PAD.top}
-              width={Math.max(0.5, xR - xL)} height={gh}
-              className="cg-hist"
-              opacity={0.05 + intensity * 0.20}
-            />
-          )
-        })}
-
         {/* Grid verticals */}
         {gridXVals.map(v => (
           <line key={`gx${v}`} x1={sx(v)} y1={PAD.top} x2={sx(v)} y2={PAD.top + gh} className="cg-grid" />

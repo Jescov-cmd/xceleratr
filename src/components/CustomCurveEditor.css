@@ -79,10 +79,12 @@
   padding: 4px 12px;
   cursor: pointer;
   font-family: inherit;
-  transition: background 0.1s, color 0.1s;
+  transition: background 0.1s, color 0.1s, border-color 0.1s, filter 0.1s;
 }
 
 .cce-reset:hover {
-  background: var(--bg-hover);
+  background: var(--accent-tint);
+  border-color: var(--accent-border-hov);
   color: var(--text);
+  filter: var(--accent-glow);
 }

@@ -50,9 +50,17 @@ let curve: CurveSettings = {
   curveSmoothing: 0,
 }
 
-// EMA state for smoothing — persists across hook callbacks
-let smoothMultX = 1
-let smoothMultY = 1
+// Smoothing + sub-pixel remainder state — persists across hook callbacks.
+// smoothDx/Dy: low-pass filtered output delta so curveSmoothing actually filters
+// felt cursor motion (the old behavior smoothed the multiplier, which was a no-op
+// in practice because multipliers are typically steady).
+// remX/remY: fractional pixel remainder so slow precise moves with sub-1.0
+// multipliers don't get quantized to zero. Whole pixels emit; the leftover
+// fraction carries to the next event.
+let smoothDx = 0, smoothDy = 0
+let remX = 0,    remY = 0
+let lastEventTime = 0
+let _loggedFirstMult = false
 
 // ── Monotone cubic spline (Fritsch-Carlson) ───────────────────────────────────
 
@@ -90,7 +98,12 @@ interface AxisParams {
 
 function multiplierFor(speed: number, p: AxisParams): number {
   if (!curve.accelerationEnabled || p.type === 'default') return 1
-  const maxSpeed = 60 * (1000 / curve.pollingRate)
+  // Curve domain matches the live-dot's display scale (5 px/event at 1000Hz =
+  // ~5000 px/s, a fast normal flick). Was 60 here vs 5 in displayMax — the dot
+  // would visually saturate the right side of the graph while the engine was
+  // only evaluating the leftmost ~8% of the curve, so set curves felt nothing
+  // like the graph showed.
+  const maxSpeed = 5 * (1000 / curve.pollingRate)
   const x = Math.min(1, speed / maxSpeed)
   const a = p.acceleration / 100
   const t = Math.max(0.05, p.threshold / 100)
@@ -220,7 +233,7 @@ const hookCb = koffi.register((nCode: number, wParam: number | bigint, lParam: n
 
     const dx = rawDx, dy = rawDy
     const speed = Math.sqrt(dx * dx + dy * dy)
-    const displayMax = 5 * (1000 / curve.pollingRate)  // display-only: 5000 px/s = normalizedX 1.0
+    const displayMax = 5 * (1000 / curve.pollingRate)  // 5000 px/s = normalizedX 1.0
     const normalizedX = Math.min(1, speed / displayMax)
 
     // Per-axis: each axis uses its own |delta| as input speed and its own curve.
@@ -236,19 +249,6 @@ const hookCb = koffi.register((nCode: number, wParam: number | bigint, lParam: n
       multY = m * curve.yxRatio
     }
 
-    // Curve smoothing — exponential moving average. 0 = off, 100 = very smooth.
-    // alpha 1.0 means no smoothing; alpha 0.05 means very heavy averaging.
-    if (curve.curveSmoothing > 0) {
-      const alpha = 1 - (curve.curveSmoothing / 100) * 0.95
-      smoothMultX = smoothMultX * (1 - alpha) + multX * alpha
-      smoothMultY = smoothMultY * (1 - alpha) + multY * alpha
-      multX = smoothMultX
-      multY = smoothMultY
-    } else {
-      smoothMultX = multX
-      smoothMultY = multY
-    }
-
     // Throttled live speed broadcast (~60fps) — sent before early-return so slow speeds register too
     const now = Date.now()
     if (now - _lastSpeedSend > 16) {
@@ -256,13 +256,59 @@ const hookCb = koffi.register((nCode: number, wParam: number | bigint, lParam: n
       parentPort?.postMessage({ type: 'speed', x: normalizedX })
     }
 
-    if (speed < 0.5 || (Math.abs(multX - 1) < 0.02 && Math.abs(multY - 1) < 0.02)) {
+    // Once per install, log the first non-trivial multiplier so we can verify
+    // the curve is actually being applied to cursor movement (vs just driving
+    // the live dot, which can be powered by cursor polling alone).
+    if (!_loggedFirstMult && Math.abs(multX - 1) > 0.05) {
+      _loggedFirstMult = true
+      parentPort?.postMessage({ type: 'first-mult', dx, dy, multX, multY, speed })
+    }
+
+    // If a meaningful gap separates events, treat this as a fresh stroke and
+    // reset the smoothing/remainder state so the cursor doesn't lurch from
+    // wherever the EMA was idling.
+    if (now - lastEventTime > 60) {
+      smoothDx = 0; smoothDy = 0
+      remX = 0;    remY = 0
+    }
+    lastEventTime = now
+
+    // Output-delta smoothing: low-pass filter the produced delta. Unlike the
+    // old multiplier-smoothing this is something the user actually feels —
+    // smoothing=100 visibly damps jitter; smoothing=0 is pass-through.
+    const sm = Math.max(0, Math.min(100, curve.curveSmoothing)) / 100
+    const alpha = 1 - sm * 0.85   // sm=0 → 1.0 (instant); sm=1 → 0.15 (heavy)
+    const desiredDx = dx * multX
+    const desiredDy = dy * multY
+    smoothDx = sm > 0 ? smoothDx * (1 - alpha) + desiredDx * alpha : desiredDx
+    smoothDy = sm > 0 ? smoothDy * (1 - alpha) + desiredDy * alpha : desiredDy
+
+    // Pass through cleanly when there's nothing to do — checked AFTER smoothing
+    // state update so a steady-state mult≈1 doesn't leave smoothDx/y stale.
+    if (speed < 0.5 || (Math.abs(multX - 1) < 0.02 && Math.abs(multY - 1) < 0.02 && sm === 0)) {
       prevX = x; prevY = y
       return CallNextHook(null, nCode, wParam, lParam)
     }
 
-    const newDx = Math.round(dx * multX)
-    const newDy = Math.round(dy * multY)
+    // Sub-pixel remainder: accumulate the fractional part across events so slow
+    // moves with sub-1.0 effective deltas still emit pixels at the right rate
+    // instead of rounding to zero or always-1.
+    const totalDx = smoothDx + remX
+    const totalDy = smoothDy + remY
+    const newDx = Math.trunc(totalDx)
+    const newDy = Math.trunc(totalDy)
+    remX = totalDx - newDx
+    remY = totalDy - newDy
+
+    if (newDx === 0 && newDy === 0) {
+      // Smoothed/scaled below one pixel this event. Block the original (return 1)
+      // and emit nothing — letting CallNextHook through would short-circuit the
+      // smoothing/remainder math by delivering the raw OS delta on top of our
+      // accumulated fraction. Track prevX/prevY normally so the next event's
+      // dx represents this event's physical movement only.
+      prevX = x; prevY = y
+      return 1
+    }
 
     // Update cursor tracking, clamped to screen bounds so edge events don't desync prevX/prevY
     prevX = Math.max(screenVx, Math.min(screenVx + screenVw - 1, prevX + newDx))
@@ -289,7 +335,23 @@ function install() {
   screenVx = GetSysMetric(76); screenVy = GetSysMetric(77)
   screenVw = GetSysMetric(78); screenVh = GetSysMetric(79)
   prevX = -1; prevY = -1
+  // Reset smoothing state too so a curve change doesn't leak stale EMA values
+  smoothDx = 0; smoothDy = 0
+  remX = 0;    remY = 0
+  _loggedFirstMult = false
   hookHandle = SetHookEx(14 /* WH_MOUSE_LL */, hookCb, null, 0)
+  parentPort?.postMessage({
+    type: 'install',
+    ok: !!hookHandle,
+    curveType: curve.curveType,
+    accelEnabled: curve.accelerationEnabled,
+    accel: curve.curveAcceleration,
+    threshold: curve.curveThreshold,
+    exponent: curve.curveExponent,
+    smoothing: curve.curveSmoothing,
+    pollingRate: curve.pollingRate,
+    perAxis: curve.perAxisEnabled,
+  })
 }
 
 function uninstall() {

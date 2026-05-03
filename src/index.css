@@ -105,6 +105,23 @@ input, textarea, [contenteditable] {
   --glow-shadow: none;
 }
 
+/* Accent-tinted hover utilities — every interactive button uses these so the
+   hover state picks up the user's system accent color automatically.
+   color-mix() lets us blend the dynamic --accent (set inline on .app from the
+   OS accent color) with transparency. */
+.theme-dark, .theme-light, .theme-high-contrast {
+  --accent-tint:       color-mix(in srgb, var(--accent) 10%, transparent);
+  --accent-tint-bold:  color-mix(in srgb, var(--accent) 18%, transparent);
+  --accent-border-hov: color-mix(in srgb, var(--accent) 45%, var(--border));
+  --accent-glow:       drop-shadow(0 0 6px color-mix(in srgb, var(--accent) 55%, transparent));
+}
+
+/* High-contrast theme intentionally drops the soft glow — outlines are the
+   visual language for affordance there, glows would muddle them. */
+.theme-high-contrast {
+  --accent-glow: none;
+}
+
 .theme-high-contrast button,
 .theme-high-contrast input[type="range"] {
   outline: 1px solid var(--border);

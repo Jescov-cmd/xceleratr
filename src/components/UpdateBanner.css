@@ -37,12 +37,13 @@
   border-radius: 4px;
   padding: 4px 8px;
   cursor: pointer;
-  transition: border-color 0.1s, background 0.1s;
+  transition: border-color 0.1s, background 0.1s, filter 0.1s;
 }
 
 .update-banner-btn:hover {
-  border-color: var(--active-border, var(--accent));
-  background: var(--bg-hover);
+  border-color: var(--accent-border-hov);
+  background: var(--accent-tint);
+  filter: var(--accent-glow);
 }
 
 .update-banner-btn-primary {
