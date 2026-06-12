@@ -156,14 +156,52 @@
   width: 14px;
   height: 14px;
   border-radius: 50%;
-  background: var(--thumb);
+  /* Off-center radial gives the thumb sphere-like shading — bright top-left
+     specular, mid-tone body, dark bottom-right shading. Combined with the
+     stacked drop shadow it reads as a physical bead pressed into the track. */
+  background: radial-gradient(circle at 32% 30%,
+    color-mix(in srgb, var(--thumb) 55%, #fff),
+    var(--thumb) 55%,
+    color-mix(in srgb, var(--thumb) 65%, #000));
   border: 2px solid var(--bg);
-  box-shadow: 0 0 0 1.5px var(--thumb);
+  box-shadow:
+    0 0 0 1.5px var(--thumb),
+    0 1px 2px rgba(0, 0, 0, 0.45),
+    0 3px 6px rgba(0, 0, 0, 0.30),
+    inset 0 1px 1px rgba(255, 255, 255, 0.30);
   cursor: pointer;
-  transition: transform 0.1s;
+  transition: transform 0.1s, box-shadow 0.1s;
 }
-.slider:hover::-webkit-slider-thumb { transform: scale(1.15); }
+.slider:hover::-webkit-slider-thumb {
+  transform: scale(1.15);
+  box-shadow:
+    0 0 0 1.5px var(--thumb),
+    0 2px 3px rgba(0, 0, 0, 0.50),
+    0 5px 10px rgba(0, 0, 0, 0.36),
+    inset 0 1px 1px rgba(255, 255, 255, 0.40);
+}
 .slider:focus { outline: none; }
+.theme-high-contrast .slider::-webkit-slider-thumb {
+  background: var(--thumb);
+  box-shadow: 0 0 0 1.5px var(--thumb);
+}
+.theme-high-contrast .slider:hover::-webkit-slider-thumb {
+  box-shadow: 0 0 0 1.5px var(--thumb);
+}
+
+/* Track gets a subtle depressed look so the fill sits *inside* the channel.
+   Ties together with the lifted thumb to read as a real, physical slider. */
+.slider-track {
+  box-shadow:
+    inset 0 1px 2px rgba(0, 0, 0, 0.35),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.04);
+}
+.theme-light .slider-track {
+  box-shadow:
+    inset 0 1px 2px rgba(0, 0, 0, 0.10),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.5);
+}
+.theme-high-contrast .slider-track { box-shadow: none; }
 
 /* Toggle */
 .toggle {
@@ -173,9 +211,21 @@
   border: none;
   cursor: pointer;
   position: relative;
-  transition: background 0.15s;
+  transition: background 0.15s, box-shadow 0.15s;
   flex-shrink: 0;
+  /* Depressed track — inner shadow at the top + faint inner highlight at the
+     bottom suggests the channel is recessed into the surface. Pairs with the
+     lifted thumb (drop shadow stack) for a tactile push-button feel. */
+  box-shadow:
+    inset 0 2px 3px rgba(0, 0, 0, 0.4),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.06);
 }
+.theme-light .toggle {
+  box-shadow:
+    inset 0 2px 3px rgba(0, 0, 0, 0.12),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.6);
+}
+.theme-high-contrast .toggle { box-shadow: none; }
 
 .toggle-on { background: var(--accent); }
 .toggle-off { background: var(--track-bg); }
@@ -186,9 +236,20 @@
   width: 14px;
   height: 14px;
   border-radius: 50%;
-  background: #fff;
-  transition: left 0.15s;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.25);
+  /* Off-center radial gives the thumb a curved, spherical look. The tiny
+     top-left highlight and bottom shading sell the depth far more than a flat
+     white circle. */
+  background: radial-gradient(circle at 35% 30%, #ffffff, #f0f0f0 60%, #d6d6d6);
+  transition: left 0.15s, box-shadow 0.15s;
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.45),
+    0 2px 4px rgba(0, 0, 0, 0.30),
+    inset 0 1px 1px rgba(255, 255, 255, 0.65),
+    inset 0 -1px 1px rgba(0, 0, 0, 0.10);
+}
+.theme-high-contrast .toggle-thumb {
+  background: #ffffff;
+  box-shadow: none;
 }
 
 .toggle-on .toggle-thumb { left: 23px; }
@@ -225,34 +286,56 @@
   justify-content: center;
   gap: 6px;
   padding: 8px 20px;
-  /* Subtle vertical gradient on the accent for a polished filled-button feel
-     (mimics how OS-native buttons have a soft top sheen). */
+  /* Stronger top-to-bottom gradient — top edge brighter (specular), body the
+     accent, bottom edge darker (occluded). Combined with the lift shadow
+     stack and the press transform below, the button reads as a physical key
+     that depresses on click. */
   background: linear-gradient(
     180deg,
-    color-mix(in srgb, var(--accent) 88%, #fff),
-    var(--accent)
+    color-mix(in srgb, var(--accent) 78%, #fff),
+    var(--accent) 50%,
+    color-mix(in srgb, var(--accent) 86%, #000)
   );
   color: var(--accent-text);
   border: none;
-  border-radius: 4px;
+  border-radius: 5px;
   font-size: 13px;
-  font-weight: 400;
+  font-weight: 500;
   cursor: pointer;
   font-family: inherit;
-  transition: opacity 0.1s, box-shadow 0.1s;
+  transform: translateY(0);
+  transition: opacity 0.1s, box-shadow 0.12s, transform 0.08s;
   box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.15) inset,
-    0 2px 6px color-mix(in srgb, var(--accent) 35%, transparent);
+    inset 0 1px 0 rgba(255, 255, 255, 0.30),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.20),
+    0 1px 1px rgba(0, 0, 0, 0.20),
+    0 3px 6px color-mix(in srgb, var(--accent) 35%, transparent),
+    0 8px 16px color-mix(in srgb, var(--accent) 25%, transparent);
 }
 .save-btn:hover {
-  opacity: 0.95;
+  transform: translateY(-1px);
   box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.2) inset,
-    0 3px 10px color-mix(in srgb, var(--accent) 55%, transparent);
+    inset 0 1px 0 rgba(255, 255, 255, 0.40),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.22),
+    0 2px 2px rgba(0, 0, 0, 0.22),
+    0 5px 10px color-mix(in srgb, var(--accent) 50%, transparent),
+    0 14px 24px color-mix(in srgb, var(--accent) 35%, transparent);
 }
-.save-btn:disabled { opacity: 0.4; cursor: default; box-shadow: none; }
-.theme-high-contrast .save-btn { background: var(--accent); box-shadow: none; }
-.theme-high-contrast .save-btn:hover { box-shadow: none; }
+.save-btn:active {
+  transform: translateY(1px);
+  box-shadow:
+    inset 0 2px 4px rgba(0, 0, 0, 0.30),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.10),
+    0 1px 1px rgba(0, 0, 0, 0.20);
+}
+.save-btn:disabled { opacity: 0.4; cursor: default; box-shadow: none; transform: none; }
+.theme-high-contrast .save-btn,
+.theme-high-contrast .save-btn:hover,
+.theme-high-contrast .save-btn:active {
+  background: var(--accent);
+  box-shadow: none;
+  transform: none;
+}
 
 .save-status { font-size: 12px; font-weight: 500; }
 .ok  { color: var(--success); }
@@ -268,20 +351,17 @@
 
 .stat-card {
   position: relative;
-  background: var(--bg-secondary);
+  /* Surface gradient + multi-layer shadow stack reads as a card lifted off
+     the page rather than a flat tile. Gradient mimics light-from-above; the
+     three shadow layers (close, mid, ambient) build real falloff. */
+  background: var(--depth-surface-grad);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 10px;
   padding: 14px;
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.04) inset,   /* faint top highlight */
-    0 2px 8px rgba(0, 0, 0, 0.18);             /* soft drop shadow */
+  box-shadow: var(--depth-card);
+  transition: box-shadow 0.15s, transform 0.15s;
 }
-.theme-light .stat-card {
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.6) inset,
-    0 2px 8px rgba(0, 0, 0, 0.05);
-}
-.theme-high-contrast .stat-card { box-shadow: none; }
+.theme-high-contrast .stat-card { background: var(--bg-secondary); box-shadow: none; }
 
 .stat-label {
   font-size: 11px;
@@ -302,12 +382,14 @@
 
 /* Info box */
 .info-box {
-  background: var(--bg-secondary);
+  background: var(--depth-surface-grad);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 10px;
   padding: 14px;
   margin-top: 12px;
+  box-shadow: var(--depth-card);
 }
+.theme-high-contrast .info-box { background: var(--bg-secondary); box-shadow: none; }
 
 .info-title {
   display: flex;
@@ -351,7 +433,13 @@
   font-family: 'Cascadia Code', 'Consolas', monospace;
   font-size: 11px;
   font-weight: 600;
-  background: var(--bg);
+  /* Real keycap depth: gradient face (top lighter, bottom darker), inset
+     highlight, and a stacked shadow with a slightly thicker bottom border
+     emulating the side of the key. */
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--bg) 80%, #fff),
+    var(--bg) 60%,
+    color-mix(in srgb, var(--bg) 90%, #000));
   border: 1px solid var(--border);
   border-bottom-width: 2px;
   border-radius: 4px;
@@ -359,4 +447,17 @@
   margin: 0 1px;
   color: var(--text);
   letter-spacing: 0.02em;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.10),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.30),
+    0 1px 0 rgba(0, 0, 0, 0.40),
+    0 2px 3px rgba(0, 0, 0, 0.25);
 }
+.theme-light .kbd {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.8),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.06),
+    0 1px 0 rgba(0, 0, 0, 0.10),
+    0 2px 3px rgba(0, 0, 0, 0.05);
+}
+.theme-high-contrast .kbd { background: var(--bg); box-shadow: none; }

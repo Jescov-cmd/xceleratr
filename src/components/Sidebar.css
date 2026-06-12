@@ -13,7 +13,18 @@
     color-mix(in srgb, var(--bg-secondary) 92%, #fff),
     var(--bg-secondary) 50%
   );
+  /* Inner shadow on the right edge — the page surface to its right reads as
+     "in front of" the sidebar, like the sidebar is recessed slightly. */
+  box-shadow:
+    inset -2px 0 4px rgba(0, 0, 0, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
+.theme-light .sidebar {
+  box-shadow:
+    inset -2px 0 4px rgba(0, 0, 0, 0.05),
+    inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+.theme-high-contrast .sidebar { box-shadow: none; }
 
 .theme-light .sidebar {
   background: linear-gradient(
@@ -82,7 +93,18 @@
   color: var(--active-text) !important;
   border-left-color: var(--active-border) !important;
   font-weight: 500;
+  /* Inset shadow makes the active item feel pressed into the sidebar — a
+     real depression rather than just a color change. */
+  box-shadow:
+    inset 0 1px 2px rgba(0, 0, 0, 0.20),
+    inset 0 0 0 1px color-mix(in srgb, var(--accent) 12%, transparent);
 }
+.theme-light .nav-active {
+  box-shadow:
+    inset 0 1px 2px rgba(0, 0, 0, 0.06),
+    inset 0 0 0 1px color-mix(in srgb, var(--accent) 12%, transparent);
+}
+.theme-high-contrast .nav-active { box-shadow: none; }
 
 .sidebar-bottom {
   display: flex;
