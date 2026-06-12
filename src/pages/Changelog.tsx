@@ -11,9 +11,22 @@ interface Release {
 // Newest first. Add a new entry at the top each release.
 const RELEASES: Release[] = [
   {
+    version: '1.5.0',
+    date:    '2026-06-12',
+    tag:     'current',
+    changes: [
+      { type: 'fixed',   text: 'Startup cursor jitter is gone. The curve engine no longer injects movement from inside the mouse hook itself — shaped deltas are queued and injected immediately after, so a busy system (boot, game launches) can\'t stall your cursor through the app anymore.' },
+      { type: 'fixed',   text: 'If movement injection ever gets blocked by another app\'s misbehaving mouse hook, your cursor now falls back to raw movement instead of freezing.' },
+      { type: 'fixed',   text: 'Quitting the app now restores your normal Windows mouse feel immediately — previously Enhance Pointer Precision stayed disabled until you logged off.' },
+      { type: 'changed', text: 'Brand new painted icon — the watercolor mouse artwork replaces the old silhouette everywhere: taskbar, tray, alt-tab, installer, .exe, sidebar, and welcome wizard.' },
+      { type: 'changed', text: 'Full Windows 11 Fluent redesign — flat layered surfaces, soft card shadows, the WinUI slider (ring thumb with accent dot), outlined toggle switches, accent focus underlines on inputs, and the navigation accent pill for the active page.' },
+      { type: 'changed', text: 'The hook engine thread now runs at high priority so heavy CPU load can\'t make the cursor stutter.' },
+      { type: 'changed', text: 'Under the hood: Electron 31→42, Vite 5→8, React 18→19 — faster startup and years of platform fixes.' },
+    ],
+  },
+  {
     version: '1.4.0',
     date:    '2026-05-02',
-    tag:     'current',
     changes: [
       { type: 'added',   text: 'Local username — required field shown when sharing profiles. Auto-generated as Xcel-###### if you leave it blank, with inappropriate names blocked and a clear inline warning.' },
       { type: 'added',   text: 'Shared profiles now show who made them. Paste a share code and you\'ll see "shared by [Username]" before importing, and the import toast confirms the source.' },

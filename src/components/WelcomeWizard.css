@@ -68,20 +68,15 @@
   display: flex;
   justify-content: center;
   margin: 18px 0 26px;
-  color: var(--text);
 }
 
-.theme-dark .ww-illustration {
-  color: #ffffff;
-  filter: drop-shadow(0 0 12px rgba(255, 255, 255, 0.18));
-}
-
-.theme-light .ww-illustration {
-  color: #000000;
-}
-
-.theme-high-contrast .ww-illustration {
-  color: var(--text);
+.ww-brand-art {
+  width: 96px;
+  height: 96px;
+  object-fit: contain;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-user-drag: none;
 }
 
 .ww-grid {

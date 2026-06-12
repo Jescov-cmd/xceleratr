@@ -1,6 +1,6 @@
 import { Page } from '../App'
-import MouseIcon from './MouseIcon'
 import GlassIcon, { GlassIconName } from './GlassIcon'
+import brandArt from '../assets/brand-mouse.png'
 import './Sidebar.css'
 
 interface Props {
@@ -23,7 +23,7 @@ export default function Sidebar({ page, setPage }: Props) {
   return (
     <nav className="sidebar">
       <div className="sidebar-brand">
-        <MouseIcon size={36} strokeWidth={1.7} className="sidebar-brand-icon" />
+        <img src={brandArt} alt="Xceleratr" className="sidebar-brand-art" draggable={false} />
       </div>
 
       <div className="nav-items">
@@ -48,7 +48,7 @@ export default function Sidebar({ page, setPage }: Props) {
           <GlassIcon name="support" size={14} />
           <span>Support</span>
         </button>
-        <div className="sidebar-version">v1.4.0</div>
+        <div className="sidebar-version">v1.5.0</div>
       </div>
     </nav>
   )

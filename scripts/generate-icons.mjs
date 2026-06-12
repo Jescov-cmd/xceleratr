@@ -1,4 +1,5 @@
-// Generates icon.ico and tray.png from the brand mouse SVG.
+// Generates icon.ico and tray.png from the painted brand artwork
+// (assets/brand-mouse-square.png — 1024x1024, transparent background).
 // Run with: node scripts/generate-icons.mjs   (or `npm run icons`)
 //
 // IMPORTANT: writes to BOTH public/ AND dist/. public/ is the source of truth
@@ -23,20 +24,15 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const PUBLIC_DIR = path.join(__dirname, '..', 'public')
 const DIST_DIR   = path.join(__dirname, '..', 'dist')
 
-// White-on-transparent mouse silhouette (coolicons). White is the most
-// universally visible choice for Windows taskbar/tray which are dark by
-// default; on light taskbars it'll appear as a soft outline against the
-// system accent. Stroke is slightly thicker (2.4) than the in-app SVG so
-// the body stays readable at 16-32px sizes.
-const SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
-  <path d="M12 10V7M18 9V15C18 18.3137 15.3137 21 12 21C8.68629 21 6 18.3137 6 15V9C6 5.68629 8.68629 3 12 3C15.3137 3 18 5.68629 18 9Z"/>
-</svg>`
+// Painted watercolor mouse artwork — the brand icon for everything
+// (taskbar, tray, alt-tab, installer, in-app via src/assets/brand-mouse.png).
+const MASTER = path.join(__dirname, '..', 'assets', 'brand-mouse-square.png')
 
 const ICO_SIZES = [16, 24, 32, 48, 64, 128, 256]
 const TRAY_SIZE = 32
 
 async function rasterize(size) {
-  return sharp(Buffer.from(SVG))
+  return sharp(MASTER)
     .resize(size, size, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
     .png()
     .toBuffer()

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { AppSettings, CurveType, DEFAULT_CUSTOM_POINTS } from '../types'
-import MouseIcon from './MouseIcon'
+import brandArt from '../assets/brand-mouse.png'
 import './WelcomeWizard.css'
 
 interface Props {
@@ -59,7 +59,7 @@ export default function WelcomeWizard({ onFinish, onSkip }: Props) {
             <h2 className="ww-title">Welcome to Xceleratr</h2>
             <p className="ww-sub">A custom mouse acceleration utility. Three quick questions and you're set.</p>
             <div className="ww-illustration" aria-hidden>
-              <MouseIcon size={68} strokeWidth={1.4} />
+              <img src={brandArt} alt="" className="ww-brand-art" draggable={false} />
             </div>
             <div className="ww-actions ww-actions-end">
               <button className="ww-btn ww-btn-link" onClick={onSkip}>Skip — I'll set it up later</button>

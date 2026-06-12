@@ -19,14 +19,14 @@
   border-bottom: 1px solid var(--border);
 }
 
-/* Brand icon — muted gray to match the sidebar nav icons.
-   High-contrast theme keeps full contrast for accessibility. */
-.sidebar-brand-icon {
-  color: var(--text-muted);
-}
-
-.theme-high-contrast .sidebar-brand-icon {
-  color: var(--text);
+/* Painted brand artwork — given a little extra room so the watercolor
+   splashes read clearly at sidebar scale. */
+.sidebar-brand-art {
+  width: 56px;
+  height: 56px;
+  object-fit: contain;
+  user-select: none;
+  -webkit-user-drag: none;
 }
 
 .nav-items {
