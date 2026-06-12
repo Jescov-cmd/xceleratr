@@ -150,60 +150,44 @@
   margin: 0;
 }
 
+/* WinUI slider thumb: a solid ring with an accent dot inside. The dot grows
+   on hover and shrinks on press — exactly how the Windows 11 slider behaves.
+   Hard radial stops draw the dot; --ctl-solid is the ring body color. */
 .slider::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-  width: 14px;
-  height: 14px;
+  width: 18px;
+  height: 18px;
   border-radius: 50%;
-  /* Off-center radial gives the thumb sphere-like shading — bright top-left
-     specular, mid-tone body, dark bottom-right shading. Combined with the
-     stacked drop shadow it reads as a physical bead pressed into the track. */
-  background: radial-gradient(circle at 32% 30%,
-    color-mix(in srgb, var(--thumb) 55%, #fff),
-    var(--thumb) 55%,
-    color-mix(in srgb, var(--thumb) 65%, #000));
-  border: 2px solid var(--bg);
-  box-shadow:
-    0 0 0 1.5px var(--thumb),
-    0 1px 2px rgba(0, 0, 0, 0.45),
-    0 3px 6px rgba(0, 0, 0, 0.30),
-    inset 0 1px 1px rgba(255, 255, 255, 0.30);
+  background: radial-gradient(circle,
+    var(--thumb) 5px,
+    var(--ctl-solid) 5.5px);
+  border: 1px solid var(--border);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
   cursor: pointer;
-  transition: transform 0.1s, box-shadow 0.1s;
 }
 .slider:hover::-webkit-slider-thumb {
-  transform: scale(1.15);
-  box-shadow:
-    0 0 0 1.5px var(--thumb),
-    0 2px 3px rgba(0, 0, 0, 0.50),
-    0 5px 10px rgba(0, 0, 0, 0.36),
-    inset 0 1px 1px rgba(255, 255, 255, 0.40);
+  background: radial-gradient(circle,
+    var(--thumb) 6.5px,
+    var(--ctl-solid) 7px);
+}
+.slider:active::-webkit-slider-thumb {
+  background: radial-gradient(circle,
+    var(--thumb) 4.5px,
+    var(--ctl-solid) 5px);
 }
 .slider:focus { outline: none; }
-.theme-high-contrast .slider::-webkit-slider-thumb {
+.theme-high-contrast .slider::-webkit-slider-thumb,
+.theme-high-contrast .slider:hover::-webkit-slider-thumb,
+.theme-high-contrast .slider:active::-webkit-slider-thumb {
   background: var(--thumb);
-  box-shadow: 0 0 0 1.5px var(--thumb);
+  border-color: var(--thumb);
+  box-shadow: none;
 }
-.theme-high-contrast .slider:hover::-webkit-slider-thumb {
-  box-shadow: 0 0 0 1.5px var(--thumb);
-}
-
-/* Track gets a subtle depressed look so the fill sits *inside* the channel.
-   Ties together with the lifted thumb to read as a real, physical slider. */
-.slider-track {
-  box-shadow:
-    inset 0 1px 2px rgba(0, 0, 0, 0.35),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.04);
-}
-.theme-light .slider-track {
-  box-shadow:
-    inset 0 1px 2px rgba(0, 0, 0, 0.10),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.5);
-}
-.theme-high-contrast .slider-track { box-shadow: none; }
 
 /* Toggle */
+/* WinUI ToggleSwitch: off = transparent pill with a 1px outline and a muted
+   knob; on = accent fill with a white knob. Flat, quick, no inner shadows. */
 .toggle {
   width: 40px;
   height: 20px;
@@ -213,22 +197,16 @@
   position: relative;
   transition: background 0.15s, box-shadow 0.15s;
   flex-shrink: 0;
-  /* Depressed track — inner shadow at the top + faint inner highlight at the
-     bottom suggests the channel is recessed into the surface. Pairs with the
-     lifted thumb (drop shadow stack) for a tactile push-button feel. */
-  box-shadow:
-    inset 0 2px 3px rgba(0, 0, 0, 0.4),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.06);
 }
-.theme-light .toggle {
-  box-shadow:
-    inset 0 2px 3px rgba(0, 0, 0, 0.12),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.6);
-}
-.theme-high-contrast .toggle { box-shadow: none; }
 
-.toggle-on { background: var(--accent); }
-.toggle-off { background: var(--track-bg); }
+.toggle-on  { background: var(--accent); }
+.toggle-off {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text-muted) 70%, transparent);
+}
+.toggle-off:hover {
+  background: var(--bg-hover);
+}
 
 .toggle-thumb {
   position: absolute;
@@ -236,16 +214,13 @@
   width: 14px;
   height: 14px;
   border-radius: 50%;
-  /* Off-center radial gives the thumb a curved, spherical look. The tiny
-     top-left highlight and bottom shading sell the depth far more than a flat
-     white circle. */
-  background: radial-gradient(circle at 35% 30%, #ffffff, #f0f0f0 60%, #d6d6d6);
-  transition: left 0.15s, box-shadow 0.15s;
-  box-shadow:
-    0 1px 2px rgba(0, 0, 0, 0.45),
-    0 2px 4px rgba(0, 0, 0, 0.30),
-    inset 0 1px 1px rgba(255, 255, 255, 0.65),
-    inset 0 -1px 1px rgba(0, 0, 0, 0.10);
+  background: var(--accent-text);
+  transition: left 0.15s, background 0.15s;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+.toggle-off .toggle-thumb {
+  background: var(--text-muted);
+  box-shadow: none;
 }
 .theme-high-contrast .toggle-thumb {
   background: #ffffff;
@@ -261,14 +236,20 @@
   padding: 8px 12px;
   background: var(--input-bg);
   border: 1px solid var(--input-border);
-  border-radius: 4px;
+  border-radius: var(--radius-ctl);
   color: var(--text);
   font-size: 13px;
   font-family: inherit;
   outline: none;
-  transition: border-color 0.1s;
+  /* Fluent text box: resting bottom edge slightly stronger than the sides */
+  box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--text-muted) 35%, transparent);
+  transition: border-color 0.1s, box-shadow 0.1s;
 }
-.text-input:focus { border-color: var(--input-focus); }
+.text-input:focus {
+  border-color: var(--input-border);
+  /* Focus = 2px accent underline, the WinUI signature */
+  box-shadow: inset 0 -2px 0 var(--input-focus);
+}
 
 /* Save row */
 .save-row {
@@ -280,61 +261,43 @@
   border-top: 1px solid var(--border);
 }
 
+/* WinUI accent button: flat accent fill with a hairline top highlight and
+   bottom shade. Hover dims to 90%, press to 80% with dimmed text — state
+   changes live in the fill, not in transforms or glows. */
 .save-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
   padding: 8px 20px;
-  /* Stronger top-to-bottom gradient — top edge brighter (specular), body the
-     accent, bottom edge darker (occluded). Combined with the lift shadow
-     stack and the press transform below, the button reads as a physical key
-     that depresses on click. */
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--accent) 78%, #fff),
-    var(--accent) 50%,
-    color-mix(in srgb, var(--accent) 86%, #000)
-  );
+  background: var(--accent);
   color: var(--accent-text);
   border: none;
-  border-radius: 5px;
+  border-radius: var(--radius-ctl);
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
   font-family: inherit;
-  transform: translateY(0);
-  transition: opacity 0.1s, box-shadow 0.12s, transform 0.08s;
+  transition: background 0.08s;
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.30),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.20),
-    0 1px 1px rgba(0, 0, 0, 0.20),
-    0 3px 6px color-mix(in srgb, var(--accent) 35%, transparent),
-    0 8px 16px color-mix(in srgb, var(--accent) 25%, transparent);
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.20);
 }
 .save-btn:hover {
-  transform: translateY(-1px);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.40),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.22),
-    0 2px 2px rgba(0, 0, 0, 0.22),
-    0 5px 10px color-mix(in srgb, var(--accent) 50%, transparent),
-    0 14px 24px color-mix(in srgb, var(--accent) 35%, transparent);
+  background: color-mix(in srgb, var(--accent) 90%, var(--bg));
 }
 .save-btn:active {
-  transform: translateY(1px);
-  box-shadow:
-    inset 0 2px 4px rgba(0, 0, 0, 0.30),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.10),
-    0 1px 1px rgba(0, 0, 0, 0.20);
+  background: color-mix(in srgb, var(--accent) 80%, var(--bg));
+  color: color-mix(in srgb, var(--accent-text) 70%, transparent);
+  box-shadow: none;
 }
-.save-btn:disabled { opacity: 0.4; cursor: default; box-shadow: none; transform: none; }
+.save-btn:disabled { opacity: 0.4; cursor: default; box-shadow: none; }
 .theme-high-contrast .save-btn,
 .theme-high-contrast .save-btn:hover,
 .theme-high-contrast .save-btn:active {
   background: var(--accent);
+  color: var(--accent-text);
   box-shadow: none;
-  transform: none;
 }
 
 .save-status { font-size: 12px; font-weight: 500; }
@@ -351,15 +314,13 @@
 
 .stat-card {
   position: relative;
-  /* Surface gradient + multi-layer shadow stack reads as a card lifted off
-     the page rather than a flat tile. Gradient mimics light-from-above; the
-     three shadow layers (close, mid, ambient) build real falloff. */
-  background: var(--depth-surface-grad);
-  border: 1px solid var(--border);
-  border-radius: 10px;
+  /* Fluent card: translucent layer fill + hairline stroke + whisper shadow */
+  background: var(--card-bg);
+  border: 1px solid var(--card-stroke);
+  border-radius: var(--radius-card);
   padding: 14px;
   box-shadow: var(--depth-card);
-  transition: box-shadow 0.15s, transform 0.15s;
+  transition: box-shadow 0.15s;
 }
 .theme-high-contrast .stat-card { background: var(--bg-secondary); box-shadow: none; }
 
@@ -382,9 +343,9 @@
 
 /* Info box */
 .info-box {
-  background: var(--depth-surface-grad);
-  border: 1px solid var(--border);
-  border-radius: 10px;
+  background: var(--card-bg);
+  border: 1px solid var(--card-stroke);
+  border-radius: var(--radius-card);
   padding: 14px;
   margin-top: 12px;
   box-shadow: var(--depth-card);
@@ -433,31 +394,13 @@
   font-family: 'Cascadia Code', 'Consolas', monospace;
   font-size: 11px;
   font-weight: 600;
-  /* Real keycap depth: gradient face (top lighter, bottom darker), inset
-     highlight, and a stacked shadow with a slightly thicker bottom border
-     emulating the side of the key. */
-  background: linear-gradient(180deg,
-    color-mix(in srgb, var(--bg) 80%, #fff),
-    var(--bg) 60%,
-    color-mix(in srgb, var(--bg) 90%, #000));
+  background: var(--bg-hover);
   border: 1px solid var(--border);
   border-bottom-width: 2px;
-  border-radius: 4px;
+  border-radius: var(--radius-ctl);
   padding: 1px 6px;
   margin: 0 1px;
   color: var(--text);
   letter-spacing: 0.02em;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.10),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.30),
-    0 1px 0 rgba(0, 0, 0, 0.40),
-    0 2px 3px rgba(0, 0, 0, 0.25);
 }
-.theme-light .kbd {
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.8),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.06),
-    0 1px 0 rgba(0, 0, 0, 0.10),
-    0 2px 3px rgba(0, 0, 0, 0.05);
-}
-.theme-high-contrast .kbd { background: var(--bg); box-shadow: none; }
+.theme-high-contrast .kbd { background: var(--bg); }

@@ -5,10 +5,16 @@
 }
 
 :root {
-  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  /* Segoe UI Variable is the Windows 11 system face — optical sizing gives
+     crisper small text than classic Segoe UI. Falls back gracefully. */
+  font-family: 'Segoe UI Variable Text', 'Segoe UI', system-ui, -apple-system, sans-serif;
   font-size: 14px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
+
+  /* Fluent geometry: controls 4px, surfaces/cards 8px */
+  --radius-ctl:  4px;
+  --radius-card: 8px;
 }
 
 html, body {
@@ -49,6 +55,10 @@ input, textarea, [contenteditable] {
   --danger: #ff6b6b;
   --shadow: rgba(0, 0, 0, 0.5);
   --glow-shadow: none;
+  /* Fluent layer tokens (WinUI card/control fills) */
+  --card-bg:     rgba(255, 255, 255, 0.0512);
+  --card-stroke: rgba(255, 255, 255, 0.0578);
+  --ctl-solid:   #454545;  /* slider thumb body, control-solid-fill */
 }
 
 /* ── Light theme — Windows 11 Light ─────────────────────────────────────── */
@@ -76,6 +86,9 @@ input, textarea, [contenteditable] {
   --danger: #c42b1c;
   --shadow: rgba(0, 0, 0, 0.12);
   --glow-shadow: none;
+  --card-bg:     rgba(255, 255, 255, 0.7);
+  --card-stroke: rgba(0, 0, 0, 0.0578);
+  --ctl-solid:   #ffffff;
 }
 
 /* ── High Contrast theme — Windows 11 High Contrast Black ───────────────── */
@@ -103,6 +116,9 @@ input, textarea, [contenteditable] {
   --danger: #ff6b6b;
   --shadow: rgba(255, 255, 0, 0.15);
   --glow-shadow: none;
+  --card-bg:     #000000;
+  --card-stroke: #ffffff;
+  --ctl-solid:   #000000;
 }
 
 /* Accent-tinted hover utilities — every interactive button uses these so the
@@ -113,72 +129,33 @@ input, textarea, [contenteditable] {
   --accent-tint:       color-mix(in srgb, var(--accent) 10%, transparent);
   --accent-tint-bold:  color-mix(in srgb, var(--accent) 18%, transparent);
   --accent-border-hov: color-mix(in srgb, var(--accent) 45%, var(--border));
-  --accent-glow:       drop-shadow(0 0 6px color-mix(in srgb, var(--accent) 55%, transparent));
+  /* Fluent keeps affordance in fills and strokes, not glows — neutralized,
+     kept as a var because many components reference it in filter:. */
+  --accent-glow:       none;
 }
 
-/* ── Depth utilities — stacked shadows that read as real Z depth ───────────
-   Cards/buttons that opt into these feel lifted off the surface (close shadow
-   for the contact area, mid for the lift, ambient for atmosphere) with an
-   inner top highlight + bottom inset suggesting a light source from above. */
+/* ── Elevation — Fluent/WinUI soft shadows ─────────────────────────────────
+   Win11 depth is quiet: a card rests on the surface with a whisper of shadow
+   and a 1px stroke; hover lifts it barely. No bevels, no chiseled rims. */
 .theme-dark {
-  --depth-rim-top:     inset 0 1px 0 rgba(255, 255, 255, 0.06);
-  --depth-rim-bottom:  inset 0 -1px 0 rgba(0, 0, 0, 0.35);
-  --depth-card:
-    var(--depth-rim-top),
-    var(--depth-rim-bottom),
-    0 1px 1px rgba(0, 0, 0, 0.18),
-    0 4px 10px rgba(0, 0, 0, 0.28),
-    0 14px 28px rgba(0, 0, 0, 0.18);
-  --depth-card-hover:
-    inset 0 1px 0 rgba(255, 255, 255, 0.10),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.40),
-    0 2px 2px rgba(0, 0, 0, 0.22),
-    0 8px 18px rgba(0, 0, 0, 0.36),
-    0 22px 44px rgba(0, 0, 0, 0.24);
+  --depth-card:       0 2px 4px rgba(0, 0, 0, 0.26);
+  --depth-card-hover: 0 4px 8px rgba(0, 0, 0, 0.26);
   --depth-button:
-    inset 0 1px 0 rgba(255, 255, 255, 0.12),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.30),
-    0 1px 2px rgba(0, 0, 0, 0.30),
-    0 3px 8px rgba(0, 0, 0, 0.24);
-  --depth-pressed:
-    inset 0 2px 4px rgba(0, 0, 0, 0.45),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.04);
-  --depth-surface-grad: linear-gradient(180deg,
-    color-mix(in srgb, var(--bg-secondary) 92%, #fff),
-    var(--bg-secondary) 55%,
-    color-mix(in srgb, var(--bg-secondary) 96%, #000));
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.20);
+  --depth-pressed:    none;
+  --depth-surface-grad: var(--card-bg);
 }
 .theme-light {
-  --depth-rim-top:     inset 0 1px 0 rgba(255, 255, 255, 0.85);
-  --depth-rim-bottom:  inset 0 -1px 0 rgba(0, 0, 0, 0.06);
-  --depth-card:
-    var(--depth-rim-top),
-    var(--depth-rim-bottom),
-    0 1px 1px rgba(0, 0, 0, 0.04),
-    0 3px 8px rgba(0, 0, 0, 0.06),
-    0 10px 24px rgba(0, 0, 0, 0.05);
-  --depth-card-hover:
-    inset 0 1px 0 rgba(255, 255, 255, 0.95),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.07),
-    0 2px 3px rgba(0, 0, 0, 0.05),
-    0 6px 14px rgba(0, 0, 0, 0.10),
-    0 18px 36px rgba(0, 0, 0, 0.08);
+  --depth-card:       0 2px 4px rgba(0, 0, 0, 0.04);
+  --depth-card-hover: 0 4px 8px rgba(0, 0, 0, 0.06);
   --depth-button:
-    inset 0 1px 0 rgba(255, 255, 255, 0.7),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.06),
-    0 1px 2px rgba(0, 0, 0, 0.10),
-    0 2px 6px rgba(0, 0, 0, 0.07);
-  --depth-pressed:
-    inset 0 2px 4px rgba(0, 0, 0, 0.10),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.5);
-  --depth-surface-grad: linear-gradient(180deg,
-    #ffffff,
-    var(--bg-secondary) 60%,
-    color-mix(in srgb, var(--bg-secondary) 94%, #000));
+    inset 0 1px 0 rgba(255, 255, 255, 0.5),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.05);
+  --depth-pressed:    none;
+  --depth-surface-grad: var(--card-bg);
 }
 .theme-high-contrast {
-  --depth-rim-top:     none;
-  --depth-rim-bottom:  none;
   --depth-card:        none;
   --depth-card-hover:  none;
   --depth-button:      none;

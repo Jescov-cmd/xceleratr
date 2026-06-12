@@ -7,26 +7,10 @@
   -webkit-app-region: drag;
   flex-shrink: 0;
   border-bottom: 1px solid var(--border);
-  /* Very subtle vertical gradient — a hair brighter at the top so the bar
-     feels like it has a light edge, easing into the page below. */
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--bg-secondary) 90%, #fff),
-    var(--bg-secondary)
-  );
+  background: var(--bg-secondary);
   border-radius: 8px 8px 0 0;
   position: relative;
 }
-
-.theme-light .titlebar {
-  background: linear-gradient(
-    180deg,
-    var(--bg-secondary),
-    color-mix(in srgb, var(--bg-secondary) 96%, #000)
-  );
-}
-
-.theme-high-contrast .titlebar { background: var(--bg-secondary); }
 
 .titlebar-brand {
   position: absolute;
@@ -73,9 +57,8 @@
 }
 
 .ctrl-btn:hover {
-  background: var(--accent-tint);
+  background: var(--bg-hover);
   color: var(--text);
-  filter: var(--accent-glow);
 }
 
 /* Close button keeps the red Windows convention — overrides the accent hover. */

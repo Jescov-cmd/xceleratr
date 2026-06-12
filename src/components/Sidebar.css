@@ -6,35 +6,10 @@
   justify-content: space-between;
   padding: 12px 8px 16px;
   border-right: 1px solid var(--border);
-  /* Soft top-down gradient — a touch lighter at the top fading into the base
-     bg-secondary at the bottom. Adds depth without color-shifting the theme. */
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--bg-secondary) 92%, #fff),
-    var(--bg-secondary) 50%
-  );
-  /* Inner shadow on the right edge — the page surface to its right reads as
-     "in front of" the sidebar, like the sidebar is recessed slightly. */
-  box-shadow:
-    inset -2px 0 4px rgba(0, 0, 0, 0.18),
-    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  /* Flat NavigationView pane — Win11 separates the nav pane from content
+     with a hairline stroke and a slightly different solid, nothing more. */
+  background: var(--bg-secondary);
 }
-.theme-light .sidebar {
-  box-shadow:
-    inset -2px 0 4px rgba(0, 0, 0, 0.05),
-    inset 0 1px 0 rgba(255, 255, 255, 0.7);
-}
-.theme-high-contrast .sidebar { box-shadow: none; }
-
-.theme-light .sidebar {
-  background: linear-gradient(
-    180deg,
-    var(--bg-secondary),
-    color-mix(in srgb, var(--bg-secondary) 96%, #000) 100%
-  );
-}
-
-.theme-high-contrast .sidebar { background: var(--bg-secondary); }
 
 .sidebar-brand {
   display: flex;
@@ -63,48 +38,56 @@
 }
 
 .nav-item {
+  position: relative;
   width: 100%;
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 8px 12px;
+  padding: 9px 12px;
   border: none;
-  border-left: 2px solid transparent;
   background: transparent;
   color: var(--text-muted);
   cursor: pointer;
-  border-radius: 4px;
+  border-radius: var(--radius-ctl);
   font-size: 13px;
   font-weight: 400;
   text-align: left;
-  transition: background 0.1s, color 0.1s, border-color 0.1s, filter 0.1s;
+  transition: background 0.1s, color 0.1s;
   font-family: inherit;
   letter-spacing: 0;
 }
 
 .nav-item:hover {
-  background: var(--accent-tint);
+  background: var(--bg-hover);
   color: var(--text);
-  filter: var(--accent-glow);
+}
+.nav-item:active {
+  background: var(--bg-hover);
+  color: var(--text-muted);
 }
 
+/* Win11 NavigationView selection: quiet neutral fill + the accent indicator
+   pill on the left edge. The pill, not the fill, says "you are here". */
 .nav-active {
+  background: var(--bg-hover) !important;
+  color: var(--text) !important;
+  font-weight: 500;
+}
+.nav-active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 16px;
+  border-radius: 1.5px;
+  background: var(--accent);
+}
+.theme-high-contrast .nav-active {
   background: var(--active-bg) !important;
   color: var(--active-text) !important;
-  border-left-color: var(--active-border) !important;
-  font-weight: 500;
-  /* Inset shadow makes the active item feel pressed into the sidebar — a
-     real depression rather than just a color change. */
-  box-shadow:
-    inset 0 1px 2px rgba(0, 0, 0, 0.20),
-    inset 0 0 0 1px color-mix(in srgb, var(--accent) 12%, transparent);
 }
-.theme-light .nav-active {
-  box-shadow:
-    inset 0 1px 2px rgba(0, 0, 0, 0.06),
-    inset 0 0 0 1px color-mix(in srgb, var(--accent) 12%, transparent);
-}
-.theme-high-contrast .nav-active { box-shadow: none; }
 
 .sidebar-bottom {
   display: flex;
@@ -131,9 +114,8 @@
 }
 
 .sidebar-support:hover {
-  background: var(--accent-tint);
+  background: var(--bg-hover);
   color: var(--text);
-  filter: var(--accent-glow);
 }
 
 .sidebar-support svg {
