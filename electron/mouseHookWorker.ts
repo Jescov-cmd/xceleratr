@@ -62,6 +62,10 @@ let remX = 0,    remY = 0
 let lastEventTime = 0
 let _loggedFirstMult = false
 
+// Cached on apply — recomputing `5 * (1000 / pollingRate)` per mouse event was
+// pure overhead in the 1000Hz hot path.
+let _displayMax = 5
+
 // ── Monotone cubic spline (Fritsch-Carlson) ───────────────────────────────────
 
 function monoSpline(pts: CurvePoint[], x: number): number {
@@ -103,8 +107,7 @@ function multiplierFor(speed: number, p: AxisParams): number {
   // would visually saturate the right side of the graph while the engine was
   // only evaluating the leftmost ~8% of the curve, so set curves felt nothing
   // like the graph showed.
-  const maxSpeed = 5 * (1000 / curve.pollingRate)
-  const x = Math.min(1, speed / maxSpeed)
+  const x = speed >= _displayMax ? 1 : speed / _displayMax
   const a = p.acceleration / 100
   const t = Math.max(0.05, p.threshold / 100)
   switch (p.type) {
@@ -232,9 +235,19 @@ const hookCb = koffi.register((nCode: number, wParam: number | bigint, lParam: n
     }
 
     const dx = rawDx, dy = rawDy
-    const speed = Math.sqrt(dx * dx + dy * dy)
-    const displayMax = 5 * (1000 / curve.pollingRate)  // 5000 px/s = normalizedX 1.0
-    const normalizedX = Math.min(1, speed / displayMax)
+    // Squared-distance gate first — avoids Math.sqrt for the (extremely common)
+    // tiny / zero-motion events. We only need true speed past this gate.
+    const speedSq = dx * dx + dy * dy
+
+    // Fast path: zero-motion event. CallNextHook through cleanly with no math,
+    // no SendInput, no IPC — these account for a large fraction of WH_MOUSE_LL
+    // wakeups during normal use and used to do a full speed-broadcast cycle.
+    if (speedSq === 0) {
+      prevX = x; prevY = y
+      return CallNextHook(null, nCode, wParam, lParam)
+    }
+
+    const speed = Math.sqrt(speedSq)
 
     // Per-axis: each axis uses its own |delta| as input speed and its own curve.
     // Single-curve mode: total speed drives one shared multiplier, then yxRatio
@@ -249,12 +262,7 @@ const hookCb = koffi.register((nCode: number, wParam: number | bigint, lParam: n
       multY = m * curve.yxRatio
     }
 
-    // Throttled live speed broadcast (~60fps) — sent before early-return so slow speeds register too
     const now = Date.now()
-    if (now - _lastSpeedSend > 16) {
-      _lastSpeedSend = now
-      parentPort?.postMessage({ type: 'speed', x: normalizedX })
-    }
 
     // Once per install, log the first non-trivial multiplier so we can verify
     // the curve is actually being applied to cursor movement (vs just driving
@@ -326,20 +334,7 @@ const hookCb = koffi.register((nCode: number, wParam: number | bigint, lParam: n
   }
 }, koffi.pointer(HookProto))
 
-let _lastSpeedSend = 0
-
-function install() {
-  if (hookHandle) { UnhookHook(hookHandle); hookHandle = null }
-  // Always install — even for 'default' curve the hook broadcasts live-speed
-  // data for the graph. The callback handles passthrough when mult ≈ 1 && ratio ≈ 1.
-  screenVx = GetSysMetric(76); screenVy = GetSysMetric(77)
-  screenVw = GetSysMetric(78); screenVh = GetSysMetric(79)
-  prevX = -1; prevY = -1
-  // Reset smoothing state too so a curve change doesn't leak stale EMA values
-  smoothDx = 0; smoothDy = 0
-  remX = 0;    remY = 0
-  _loggedFirstMult = false
-  hookHandle = SetHookEx(14 /* WH_MOUSE_LL */, hookCb, null, 0)
+function diagnostic() {
   parentPort?.postMessage({
     type: 'install',
     ok: !!hookHandle,
@@ -352,6 +347,29 @@ function install() {
     pollingRate: curve.pollingRate,
     perAxis: curve.perAxisEnabled,
   })
+}
+
+// Hot-reload the curve without unhooking — settings changes (slider drag, profile
+// swap, hotkey toggle) used to call install() which unhooks + re-hooks. That gap
+// causes a visible cursor stutter every time the user touches anything. Now we
+// keep the hook live and only reset stroke-state so the new curve doesn't carry
+// stale EMA / remainder values from the previous one.
+function applyConfigHot() {
+  _displayMax = 5 * (1000 / curve.pollingRate)
+  smoothDx = 0; smoothDy = 0
+  remX = 0;    remY = 0
+  lastEventTime = 0
+  _loggedFirstMult = false
+}
+
+function install() {
+  if (hookHandle) { UnhookHook(hookHandle); hookHandle = null }
+  screenVx = GetSysMetric(76); screenVy = GetSysMetric(77)
+  screenVw = GetSysMetric(78); screenVh = GetSysMetric(79)
+  prevX = -1; prevY = -1
+  applyConfigHot()
+  hookHandle = SetHookEx(14 /* WH_MOUSE_LL */, hookCb, null, 0)
+  diagnostic()
 }
 
 function uninstall() {
@@ -381,7 +399,12 @@ function pump() {
 parentPort?.on('message', (data: { type: string; curve?: CurveSettings }) => {
   if (data.type === 'apply' && data.curve) {
     curve = data.curve
-    install()
+    if (!hookHandle) {
+      install()      // first time — actual SetWindowsHookEx call
+    } else {
+      applyConfigHot()  // hot reload — keep the hook live, just refresh state
+      diagnostic()
+    }
   } else if (data.type === 'stop') {
     running = false
     uninstall()

@@ -171,20 +171,33 @@ function restoreOriginals() {
   if (isDev) console.log('[xceleratr] restored originals')
 }
 
-// ── Win32 SPI (speed only — acceleration is handled by the hook worker) ──────
+// ── Win32 SPI ────────────────────────────────────────────────────────────────
+// regWriteAsync writes acceleration values to the registry, but the *running*
+// Windows session keeps using its cached pointer ballistics curve until next
+// logon (or until something pushes via SystemParametersInfoW). Without an SPI
+// flush, the OS would still re-accelerate our SendInput injected deltas on top
+// of our curve — that compounding is the "cursor tweaks at startup" bug.
 
-type SpiFn = (a: number, b: number, c: number, d: number) => boolean
-let SpiSpeed: SpiFn | null = null
+type SpiSpeedFn = (a: number, b: number, c: number, d: number) => boolean
+type SpiBufFn   = (a: number, b: number, buf: Buffer, d: number) => boolean
+let SpiSpeed:    SpiSpeedFn | null = null
+let SpiSetMouse: SpiBufFn   | null = null
 
 const SPI_SETMOUSESPEED = 0x71
+const SPI_SETMOUSE      = 0x04
+const SPIF_SENDCHANGE   = 0x02
 const SPIF_BOTH         = 0x03
 
 function initWinAPIs() {
   if (!IS_WIN) return
   try {
     const koffi = require('koffi')  // eslint-disable-line @typescript-eslint/no-var-requires
-    SpiSpeed = koffi.load('user32.dll').func('bool SystemParametersInfoW(uint32, uint32, intptr_t, uint32)')
-    if (isDev) console.log('[xceleratr] SpiSpeed loaded')
+    const u32 = koffi.load('user32.dll')
+    // Two bindings to the same export with different pvParam types — SPI_SETMOUSESPEED
+    // wants a small int packed as INT_PTR, SPI_SETMOUSE wants a pointer to int[3].
+    SpiSpeed    = u32.func('SystemParametersInfoW', 'bool', ['uint32', 'uint32', 'intptr_t', 'uint32'])
+    SpiSetMouse = u32.func('SystemParametersInfoW', 'bool', ['uint32', 'uint32', 'void*',     'uint32'])
+    if (isDev) console.log('[xceleratr] SPI bindings loaded')
   } catch (e) {
     console.error('[xceleratr] koffi load failed:', e)
   }
@@ -192,6 +205,20 @@ function initWinAPIs() {
 
 function apiSetSpeed(speed: number) {
   try { SpiSpeed?.(SPI_SETMOUSESPEED, 0, speed, SPIF_BOTH) } catch { /* no-op */ }
+}
+
+// Pushes [threshold1, threshold2, accelOn] into the running kernel via
+// SPI_SETMOUSE. Must be called whenever the registry MouseSpeed/MouseThreshold
+// values change; otherwise the running session still uses the pre-launch
+// ballistics until logoff. fwWinIni=0 — we don't want SPIF_UPDATEINIFILE
+// because we already wrote the registry directly, and SPIF_SENDCHANGE would
+// broadcast a system-wide WM_SETTINGCHANGE that other apps would react to.
+function apiSetMouseAccel(thr1: number, thr2: number, accelOn: number) {
+  try {
+    if (!SpiSetMouse) return
+    const buf = Buffer.from(new Int32Array([thr1, thr2, accelOn]).buffer)
+    SpiSetMouse(SPI_SETMOUSE, 0, buf, 0)
+  } catch { /* no-op */ }
 }
 
 // ── Hook worker (WH_MOUSE_LL lives in its own thread / message pump) ──────────
@@ -206,12 +233,10 @@ type HookCurve = {
   curveSmoothing: number
 }
 
-let hookWorker:      Worker | null = null
-let hookWorkerTimer: ReturnType<typeof setTimeout> | null = null
-let lastCurve:       HookCurve | null = null
+let hookWorker: Worker | null = null
+let lastCurve:  HookCurve | null = null
 
 function stopHookWorker() {
-  if (hookWorkerTimer) { clearTimeout(hookWorkerTimer); hookWorkerTimer = null }
   if (!hookWorker) return
   const w = hookWorker
   hookWorker = null  // clear before postMessage so the stale guard catches any in-flight 'ready'
@@ -223,75 +248,59 @@ function startHookWorker(curve: HookCurve) {
   if (!IS_WIN) return
   lastCurve = curve
 
-  // If worker is already running, just send updated settings — no restart needed.
-  // This eliminates the cursor-lag gap that occurred when stop+restart happened on every apply.
+  // Worker already running — just hot-swap the curve config. The worker keeps
+  // the hook installed and only resets stroke-state, so this no longer causes
+  // a cursor stutter when the user changes settings.
   if (hookWorker) {
-    if (hookWorkerTimer) { clearTimeout(hookWorkerTimer); hookWorkerTimer = null }
     hookWorker.postMessage({ type: 'apply', curve })
     return
   }
 
-  // No worker running — create one (debounced to coalesce rapid calls).
-  // 20ms is enough to merge a burst of mouse-apply IPCs without adding noticeable
-  // boot latency. Was 80ms — that contributed ~60ms of perceived startup lag.
-  if (hookWorkerTimer) { clearTimeout(hookWorkerTimer); hookWorkerTimer = null }
-  hookWorkerTimer = setTimeout(() => {
-    hookWorkerTimer = null
-    const workerPath = path.join(__dirname, 'mouseHookWorker.js')
-    if (!fs.existsSync(workerPath)) {
-      if (isDev) console.warn('[xceleratr] mouseHookWorker.js not found at', workerPath)
-      return
+  // No worker — spawn immediately, no debounce. The previous 20ms timer was
+  // there to coalesce rapid apply calls during boot, but with hot-reload the
+  // first call spawns the worker and subsequent calls just postMessage onto it.
+  const workerPath = path.join(__dirname, 'mouseHookWorker.js')
+  if (!fs.existsSync(workerPath)) {
+    if (isDev) console.warn('[xceleratr] mouseHookWorker.js not found at', workerPath)
+    return
+  }
+
+  const worker = new Worker(workerPath)
+  hookWorker = worker
+
+  worker.on('message', (msg) => {
+    if (worker !== hookWorker) return  // stale handler — a newer worker replaced this one
+    if (msg.type === 'ready') {
+      worker.postMessage({ type: 'apply', curve: lastCurve })
+      if (isDev) console.log('[xceleratr] hook worker ready')
+    } else if (msg.type === 'install' && isDev) {
+      const status = msg.ok ? 'OK' : 'FAILED — SetWindowsHookEx returned null'
+      console.log(
+        `[xceleratr] hook ${status} ` +
+        `curve=${msg.curveType} accel=${msg.accelEnabled ? msg.accel + '%' : 'OFF'} ` +
+        `thresh=${msg.threshold} exp=${msg.exponent} smooth=${msg.smoothing} ` +
+        `polling=${msg.pollingRate}Hz perAxis=${msg.perAxis}`
+      )
+    } else if (msg.type === 'first-mult' && isDev) {
+      console.log(
+        `[xceleratr] curve fired: dx=${msg.dx} dy=${msg.dy} ` +
+        `multX=${msg.multX.toFixed(3)} multY=${msg.multY.toFixed(3)} speed=${msg.speed.toFixed(2)}`
+      )
+    } else if (msg.type === 'error' && isDev) {
+      console.error('[xceleratr] hook callback error:', msg.msg)
     }
-
-    const worker = new Worker(workerPath)
-    hookWorker = worker
-
-    worker.on('message', (msg) => {
-      if (worker !== hookWorker) return  // stale handler — a newer worker replaced this one
-      if (msg.type === 'ready') {
-        worker.postMessage({ type: 'apply', curve })
-        if (isDev) console.log('[xceleratr] hook worker ready')
-      } else if (msg.type === 'speed') {
-        if (isDev && !(worker as any)._speedLogged) {
-          ;(worker as any)._speedLogged = true
-          console.log('[xceleratr] first speed msg, x:', msg.x.toFixed(3))
-        }
-        mainWindow?.webContents.send('live-speed', msg.x)
-      } else if (msg.type === 'install' && isDev) {
-        // Log every install so we can verify the hook is registered with the
-        // right curve params — useful when "the curve isn't working".
-        const status = msg.ok ? 'OK' : 'FAILED — SetWindowsHookEx returned null'
-        console.log(
-          `[xceleratr] hook install ${status} ` +
-          `curve=${msg.curveType} accel=${msg.accelEnabled ? msg.accel + '%' : 'OFF'} ` +
-          `thresh=${msg.threshold} exp=${msg.exponent} smooth=${msg.smoothing} ` +
-          `polling=${msg.pollingRate}Hz perAxis=${msg.perAxis}`
-        )
-      } else if (msg.type === 'first-mult' && isDev) {
-        // First time the curve produces a non-trivial multiplier on a real
-        // mouse event. If you never see this line after moving the mouse, the
-        // hook isn't firing or the curve isn't shaping the delta.
-        console.log(
-          `[xceleratr] curve fired: dx=${msg.dx} dy=${msg.dy} ` +
-          `multX=${msg.multX.toFixed(3)} multY=${msg.multY.toFixed(3)} speed=${msg.speed.toFixed(2)}`
-        )
-      } else if (msg.type === 'error' && isDev) {
-        console.error('[xceleratr] hook callback error:', msg.msg)
-      }
-    })
-    worker.on('error', (e) => {
-      if (isDev) console.error('[xceleratr] hook worker fatal:', e)
-    })
-    worker.on('exit', (code) => {
-      if (worker !== hookWorker) return  // intentional stop already cleared hookWorker
-      hookWorker = null
-      // Unexpected exit (e.g. antivirus kill, crash) — restart automatically
-      if (code !== 0 && lastCurve) {
-        if (isDev) console.warn('[xceleratr] hook worker exited unexpectedly (code', code, '), restarting…')
-        setTimeout(() => { if (lastCurve) startHookWorker(lastCurve) }, 1000)
-      }
-    })
-  }, 20)
+  })
+  worker.on('error', (e) => {
+    if (isDev) console.error('[xceleratr] hook worker fatal:', e)
+  })
+  worker.on('exit', (code) => {
+    if (worker !== hookWorker) return  // intentional stop already cleared hookWorker
+    hookWorker = null
+    if (code !== 0 && lastCurve) {
+      if (isDev) console.warn('[xceleratr] hook worker exited unexpectedly (code', code, '), restarting…')
+      setTimeout(() => { if (lastCurve) startHookWorker(lastCurve) }, 1000)
+    }
+  })
 }
 
 // ── Icon loader ───────────────────────────────────────────────────────────────
@@ -538,12 +547,33 @@ app.whenReady().then(() => {
   if (IS_WIN) app.setAppUserModelId('com.xceleratr.app')
   ensureUserName()  // generate User###### if blank, before any IPC reads settings
   initWinAPIs()
+
+  // Pre-spawn the hook worker BEFORE createWindow so its koffi cold-load
+  // (~100-300ms inside the worker thread) overlaps with renderer/window init
+  // instead of running serially on the critical path. Without this the curve
+  // wouldn't kick in until well after the window painted.
+  if (IS_WIN) {
+    const s = loadSettings()
+    const effectiveRatio = s.yxRatioEnabled ? s.yxRatio : 1.0
+    startHookWorker({
+      curveType: s.curveType, customCurvePoints: s.customCurvePoints,
+      curveAcceleration: s.curveAcceleration, accelerationEnabled: s.accelerationEnabled,
+      curveThreshold: s.curveThreshold, curveExponent: s.curveExponent,
+      pollingRate: s.pollingRate, yxRatio: effectiveRatio,
+      perAxisEnabled: !!s.perAxisEnabled,
+      curveTypeY: s.curveTypeY, customCurvePointsY: s.customCurvePointsY,
+      curveAccelerationY: s.curveAccelerationY, curveThresholdY: s.curveThresholdY,
+      curveExponentY: s.curveExponentY,
+      curveSmoothing: s.curveSmoothing,
+    })
+  }
+
   createWindow()
   createTray()
   startCursorPolling()
   // Defer mouse-settings apply by one tick so the window/tray paint first.
-  // captureOriginals + hook-worker spawn happen async, off the boot critical path.
-  // Eliminates the visible UI freeze that previously happened during startup.
+  // The hook worker spawn already kicked off above; the setImmediate path now
+  // mostly handles registry writes + SPI flush + hotkey registration.
   setImmediate(() => {
     const s = loadSettings()
     if (IS_WIN) applyWin(s).catch(e => { if (isDev) console.error('[xceleratr] initial apply failed:', e) })
@@ -664,16 +694,26 @@ async function applyWin(s: {
     mouseSpeed = 0; thr1 = 0; thr2 = 0
   }
 
-  // Async writes — non-blocking so UI and cursor don't stall on apply
-  if (s.accelerationEnabled) {
-    regWriteAsync('MouseSpeed',      String(mouseSpeed))
-    regWriteAsync('MouseThreshold1', String(thr1))
-    regWriteAsync('MouseThreshold2', String(thr2))
-  } else {
-    regWriteAsync('MouseSpeed',      '0')
-    regWriteAsync('MouseThreshold1', '0')
-    regWriteAsync('MouseThreshold2', '0')
-  }
+  // Async writes — non-blocking so UI and cursor don't stall on apply.
+  // These persist for next logon; the SPI call below pushes the same values
+  // into the *running* kernel state immediately.
+  const writeSpeed = s.accelerationEnabled ? String(mouseSpeed) : '0'
+  const writeThr1  = s.accelerationEnabled ? String(thr1)       : '0'
+  const writeThr2  = s.accelerationEnabled ? String(thr2)       : '0'
+  regWriteAsync('MouseSpeed',      writeSpeed)
+  regWriteAsync('MouseThreshold1', writeThr1)
+  regWriteAsync('MouseThreshold2', writeThr2)
+
+  // Push to the running kernel synchronously. Without this, Windows keeps using
+  // its pre-launch ballistics curve and re-accelerates our SendInput injected
+  // deltas on top of our hook curve — felt as cursor "tweaking" for the first
+  // ~second of every launch (the hook is intercepting *and* the OS is still
+  // applying accel). MouseSpeed > 0 means "ballistics on"; pass 1 when EPP is
+  // honored, 0 otherwise.
+  const effectiveSpeed = s.accelerationEnabled ? mouseSpeed : 0
+  const effectiveThr1  = s.accelerationEnabled ? thr1       : 0
+  const effectiveThr2  = s.accelerationEnabled ? thr2       : 0
+  apiSetMouseAccel(effectiveThr1, effectiveThr2, effectiveSpeed > 0 ? 1 : 0)
 }
 
 function applyMac(s: { accelerationEnabled: boolean }) {
