@@ -14,6 +14,16 @@ import { parentPort } from 'worker_threads'
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const koffi   = require('koffi')
 const user32  = koffi.load('user32.dll')
+const kernel32 = koffi.load('kernel32.dll')
+
+// Boost this thread to THREAD_PRIORITY_HIGHEST (2). Every mouse event in the
+// system synchronously waits on this thread while our hook runs — if we get
+// starved during boot/game-launch CPU storms, the whole cursor stutters.
+try {
+  const SetThreadPriority = kernel32.func('bool SetThreadPriority(void* hThread, int32 nPriority)')
+  const GetCurrentThread  = kernel32.func('void* GetCurrentThread()')
+  SetThreadPriority(GetCurrentThread(), 2)
+} catch { /* non-fatal — default priority still works, just jitter-prone under load */ }
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -204,6 +214,15 @@ const INPUT_SIZE = koffi.sizeof(INPUT_T)
 
 let hookHandle: any = null
 
+// Injection ring buffer — shaped deltas queued by the hook callback, injected
+// by the pump loop AFTER the callback has returned (see comment at the queue
+// site for why SendInput must never run inside the callback). Fixed-size
+// typed arrays: no allocation in the hot path.
+const INJ_MAX = 64
+const injDx = new Int32Array(INJ_MAX)
+const injDy = new Int32Array(INJ_MAX)
+let injHead = 0, injTail = 0, injCount = 0
+
 // prevX/prevY tracks the last known absolute cursor position so we can compute
 // the per-event relative delta. Initialised to -1 to detect the very first event.
 let prevX = -1, prevY = -1
@@ -318,14 +337,30 @@ const hookCb = koffi.register((nCode: number, wParam: number | bigint, lParam: n
       return 1
     }
 
+    // Injection backlog guard: if SendInput in the pump is wedged (another
+    // process's LL hook not responding), eating events would freeze the cursor
+    // entirely. Degrade gracefully instead — pass raw events through (curve
+    // momentarily off) until the queue drains.
+    if (injCount >= INJ_MAX) {
+      prevX = x; prevY = y
+      return CallNextHook(null, nCode, wParam, lParam)
+    }
+
     // Update cursor tracking, clamped to screen bounds so edge events don't desync prevX/prevY
     prevX = Math.max(screenVx, Math.min(screenVx + screenVw - 1, prevX + newDx))
     prevY = Math.max(screenVy, Math.min(screenVy + screenVh - 1, prevY + newDy))
 
-    // MOUSEEVENTF_MOVE (0x0001) relative — simpler than absolute, no normalization artifacts
-    SendInput(1, [{ type: 0, u: { mi: {
-      dx: newDx, dy: newDy, mouseData: 0, dwFlags: 0x0001, time: 0, dwExtraInfo: 0,
-    } } }], INPUT_SIZE)
+    // Queue the shaped delta; the pump injects it right after we return.
+    // NEVER call SendInput from inside this callback: the whole system mouse
+    // chain is blocked while we run, and SendInput itself synchronously walks
+    // every other LL mouse hook in the system. If any of them is slow (common
+    // during boot CPU storms), a nested call here makes US the slow hook for
+    // every event — felt as system-wide cursor jitter. Two engines doing this
+    // to each other can mutually deadlock their hook threads permanently.
+    injDx[injTail] = newDx
+    injDy[injTail] = newDy
+    injTail = (injTail + 1) % INJ_MAX
+    injCount++
 
     return 1  // block original event — our injected relative event carries the curve-adjusted movement
   } catch(e) {
@@ -389,6 +424,16 @@ function pump() {
     while (PeekMsg(winMsg, null, 0, 0, 1 /* PM_REMOVE */)) {
       TranslateMsg(winMsg)
       DispatchMsg(winMsg)
+    }
+    // Drain queued injections — outside the hook callback, so a slow foreign
+    // hook stalls only this loop iteration, never the system mouse chain.
+    while (injCount > 0) {
+      const dx = injDx[injHead], dy = injDy[injHead]
+      injHead = (injHead + 1) % INJ_MAX
+      injCount--
+      SendInput(1, [{ type: 0, u: { mi: {
+        dx, dy, mouseData: 0, dwFlags: 0x0001, time: 0, dwExtraInfo: 0,
+      } } }], INPUT_SIZE)
     }
   } catch { /* no-op */ }
   setImmediate(pump)  // yield so parentPort messages can be received

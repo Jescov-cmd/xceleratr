@@ -168,7 +168,14 @@ function restoreOriginals() {
   if (origMouse.speed)   regWrite('MouseSpeed',      origMouse.speed)
   if (origMouse.thresh1) regWrite('MouseThreshold1', origMouse.thresh1)
   if (origMouse.thresh2) regWrite('MouseThreshold2', origMouse.thresh2)
-  if (isDev) console.log('[xceleratr] restored originals')
+  // Registry alone only takes effect at next logon — push the restored values
+  // into the running session too, or the user's normal ballistics (e.g. EPP)
+  // stay disabled until they log off. Mirror of the flush in applyWin.
+  const spd  = parseInt(origMouse.speed   || '0', 10) || 0
+  const thr1 = parseInt(origMouse.thresh1 || '0', 10) || 0
+  const thr2 = parseInt(origMouse.thresh2 || '0', 10) || 0
+  apiSetMouseAccel(thr1, thr2, spd > 0 ? 1 : 0)
+  if (isDev) console.log('[xceleratr] restored originals (registry + live session)')
 }
 
 // ── Win32 SPI ────────────────────────────────────────────────────────────────
